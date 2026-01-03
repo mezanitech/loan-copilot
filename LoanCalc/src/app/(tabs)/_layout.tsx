@@ -41,11 +41,12 @@ export default function TabLayout() {
             <Tabs.Screen 
                 name="index" 
                 options={{ 
-                    title: "My Loans",
+                    title: "Dashboard",
                     tabBarLabel: "Loans",
                     tabBarIcon: ({ color }) => (
                         <TabIcon icon="💼" color={color} />
-                    )
+                    ),
+                    tabBarStyle: { display: 'none' }
                 }} 
             />
             <Tabs.Screen 
@@ -72,6 +73,7 @@ export default function TabLayout() {
                             }}>←</Text>
                         </TouchableOpacity>
                     ),
+                    tabBarStyle: { display: 'none' }
                 }} 
             />
             <Tabs.Screen 

@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Modal } from "react-native";
-import { useState } from "react";
+import { useState, forwardRef, useImperativeHandle } from "react";
 import DateTimePicker from '@react-native-community/datetimepicker';
 import InputField from "./InputField";
 
@@ -18,9 +18,18 @@ type EarlyPaymentListProps = {
     loanStartDate: Date;
 };
 
-export default function EarlyPaymentList({ payments, onPaymentsChange, loanStartDate }: EarlyPaymentListProps) {
+export type EarlyPaymentListRef = {
+    collapseAll: () => void;
+};
+
+const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
+    ({ payments, onPaymentsChange, loanStartDate }, ref) => {
     const [activeMonthPicker, setActiveMonthPicker] = useState<string | null>(null);
     const [expandedPayments, setExpandedPayments] = useState<Set<string>>(new Set());
+    
+    useImperativeHandle(ref, () => ({
+        collapseAll: () => setExpandedPayments(new Set())
+    }));
     
     const addPayment = () => {
         const newPayment: EarlyPayment = {
@@ -31,8 +40,8 @@ export default function EarlyPaymentList({ payments, onPaymentsChange, loanStart
             month: "",
         };
         onPaymentsChange([...payments, newPayment]);
-        // Auto-expand newly added payment
-        setExpandedPayments(new Set([...expandedPayments, newPayment.id]));
+        // Collapse all existing payments and expand only the new one
+        setExpandedPayments(new Set([newPayment.id]));
     };
 
     const removePayment = (id: string) => {
@@ -201,6 +210,8 @@ export default function EarlyPaymentList({ payments, onPaymentsChange, loanStart
                                                 mode="date"
                                                 display="spinner"
                                                 onChange={(event, date) => handleMonthChange(event, date, payment.id)}
+                                                textColor="#000000"
+                                                themeVariant="light"
                                             />
                                             <TouchableOpacity 
                                                 style={styles.closeButton}
@@ -243,6 +254,8 @@ export default function EarlyPaymentList({ payments, onPaymentsChange, loanStart
                                                     mode="date"
                                                     display="spinner"
                                                     onChange={(event, date) => handleMonthChange(event, date, payment.id)}
+                                                    textColor="#000000"
+                                                    themeVariant="light"
                                                 />
                                                 <TouchableOpacity 
                                                     style={styles.closeButton}
@@ -271,7 +284,9 @@ export default function EarlyPaymentList({ payments, onPaymentsChange, loanStart
             })}
         </View>
     );
-}
+});
+
+export default EarlyPaymentList;
 
 const styles = StyleSheet.create({
     container: {

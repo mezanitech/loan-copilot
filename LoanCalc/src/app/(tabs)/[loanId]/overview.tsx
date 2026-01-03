@@ -413,6 +413,8 @@ export default function LoanOverviewScreen() {
                                 mode="date"
                                 display="spinner"
                                 onChange={onDateChange}
+                                textColor="#000000"
+                                themeVariant="light"
                             />
                             <TouchableOpacity 
                                 style={styles.closeButton}
@@ -437,44 +439,62 @@ export default function LoanOverviewScreen() {
             {/* Show charts and savings if schedule is generated */}
             {paymentSchedule.length > 0 && (
                 <>
-                    {/* Show early payment benefits if early payments are configured */}
-                    {earlyPayments.length > 0 && (
-                        <View style={styles.savingsContainer}>
-                            <Text style={styles.sectionTitle}>🎉 Your Savings!</Text>
-                            <View style={styles.savingsRow}>
-                                <Text style={styles.savingsLabel}>💰 Money Saved:</Text>
-                                <Text style={styles.savingsValue}>${interestSaved.toFixed(2)}</Text>
-                            </View>
-                            <View style={styles.savingsRow}>
-                                <Text style={styles.savingsLabel}>⚡ Time Saved:</Text>
-                                <Text style={styles.savingsValue}>
-                                    {periodDecrease >= 12 
-                                        ? `${Math.floor(periodDecrease / 12)} year${Math.floor(periodDecrease / 12) !== 1 ? 's' : ''}${periodDecrease % 12 > 0 ? ` ${periodDecrease % 12} month${periodDecrease % 12 !== 1 ? 's' : ''}` : ''}`
-                                        : `${periodDecrease} month${periodDecrease !== 1 ? 's' : ''}`
-                                    }
+                    {/* Savings section - always show */}
+                    <View style={styles.savingsContainer}>
+                        <Text style={styles.sectionTitle}>
+                            {earlyPayments.length > 0 ? '🎉 Your Savings!' : '💡 Potential Savings'}
+                        </Text>
+                        
+                        {earlyPayments.length > 0 ? (
+                            <>
+                                <View style={styles.savingsRow}>
+                                    <Text style={styles.savingsLabel}>💰 Money Saved:</Text>
+                                    <Text style={styles.savingsValue}>${interestSaved.toFixed(2)}</Text>
+                                </View>
+                                <View style={styles.savingsRow}>
+                                    <Text style={styles.savingsLabel}>⚡ Time Saved:</Text>
+                                    <Text style={styles.savingsValue}>
+                                        {periodDecrease >= 12 
+                                            ? `${Math.floor(periodDecrease / 12)} year${Math.floor(periodDecrease / 12) !== 1 ? 's' : ''}${periodDecrease % 12 > 0 ? ` ${periodDecrease % 12} month${periodDecrease % 12 !== 1 ? 's' : ''}` : ''}`
+                                            : `${periodDecrease} month${periodDecrease !== 1 ? 's' : ''}`
+                                        }
+                                    </Text>
+                                </View>
+                                <View style={styles.savingsRow}>
+                                    <Text style={styles.savingsLabel}>🎊 Freedom Day:</Text>
+                                    <Text style={styles.savingsValue}>
+                                        {(() => {
+                                            const lastPayment = paymentSchedule[paymentSchedule.length - 1];
+                                            if (!lastPayment) return 'N/A';
+                                            const finalDate = new Date(date);
+                                            finalDate.setMonth(finalDate.getMonth() + paymentSchedule.length - 1);
+                                            const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                                            return `${monthNames[finalDate.getMonth()]} ${finalDate.getFullYear()}`;
+                                        })()}
+                                    </Text>
+                                </View>
+                            </>
+                        ) : (
+                            <View style={styles.emptySavingsMessage}>
+                                <Text style={styles.emptySavingsText}>
+                                    💸 Add extra payments to save money on interest and pay off your loan faster!
                                 </Text>
+                                <TouchableOpacity 
+                                    style={styles.addPaymentsButton}
+                                    onPress={() => router.push(`/(tabs)/${loanId}/payments`)}
+                                >
+                                    <Text style={styles.addPaymentsButtonText}>+ Add Extra Payments</Text>
+                                </TouchableOpacity>
                             </View>
-                            <View style={styles.savingsRow}>
-                                <Text style={styles.savingsLabel}>🎊 Freedom Day:</Text>
-                                <Text style={styles.savingsValue}>
-                                    {(() => {
-                                        const lastPayment = paymentSchedule[paymentSchedule.length - 1];
-                                        if (!lastPayment) return 'N/A';
-                                        const finalDate = new Date(date);
-                                        finalDate.setMonth(finalDate.getMonth() + paymentSchedule.length - 1);
-                                        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-                                        return `${monthNames[finalDate.getMonth()]} ${finalDate.getFullYear()}`;
-                                    })()}
-                                </Text>
-                            </View>
-                            <TouchableOpacity 
-                                style={styles.scheduleLink}
-                                onPress={() => router.push(`/(tabs)/${loanId}/schedule`)}
-                            >
-                                <Text style={styles.scheduleLinkText}>📋 View Full Payment Schedule →</Text>
-                            </TouchableOpacity>
-                        </View>
-                    )}
+                        )}
+                        
+                        <TouchableOpacity 
+                            style={styles.scheduleLink}
+                            onPress={() => router.push(`/(tabs)/${loanId}/schedule`)}
+                        >
+                            <Text style={styles.scheduleLinkText}>📋 View Full Payment Schedule →</Text>
+                        </TouchableOpacity>
+                    </View>
                     
                     {/* Chart showing how principal balance decreases over time - comparing original vs early payments */}
                     <DualLineChart
@@ -623,6 +643,30 @@ const styles = StyleSheet.create({
         marginTop: theme.spacing.lg,
     },
     scheduleLinkText: {
+        color: theme.colors.textInverse,
+        fontSize: theme.fontSize.base,
+        fontWeight: theme.fontWeight.semibold,
+    },
+    emptySavingsMessage: {
+        alignItems: 'center',
+        paddingVertical: theme.spacing.lg,
+    },
+    emptySavingsText: {
+        fontSize: theme.fontSize.base,
+        color: theme.colors.textSecondary,
+        textAlign: 'center',
+        lineHeight: 24,
+        marginBottom: theme.spacing.lg,
+        paddingHorizontal: theme.spacing.md,
+    },
+    addPaymentsButton: {
+        backgroundColor: theme.colors.primary,
+        paddingHorizontal: theme.spacing.xl,
+        paddingVertical: theme.spacing.md,
+        borderRadius: theme.borderRadius.md,
+        ...theme.shadows.sm,
+    },
+    addPaymentsButtonText: {
         color: theme.colors.textInverse,
         fontSize: theme.fontSize.base,
         fontWeight: theme.fontWeight.semibold,

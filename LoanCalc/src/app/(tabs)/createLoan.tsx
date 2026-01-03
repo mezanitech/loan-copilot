@@ -183,8 +183,9 @@ export default function CreateLoanScreen() {
     const paymentSchedule = generatePaymentSchedule();
 
     // Dismiss keyboard when tapping outside
-    return <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <ScrollView style={styles.container}>
+    return <View style={styles.wrapper}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <ScrollView style={styles.container}>
         {/* Page title */}
         <Text style={styles.title}>
             Calculate your loan payments
@@ -255,6 +256,8 @@ export default function CreateLoanScreen() {
                             mode="date"
                             display="spinner"
                             onChange={onDateChange}
+                            textColor="#000000"
+                            themeVariant="light"
                         />
                         <TouchableOpacity 
                             style={styles.closeButton}
@@ -292,13 +295,6 @@ export default function CreateLoanScreen() {
                 title="Principal & Interest Payments Over Time"
                 data={paymentSchedule}
             />
-        )}
-
-        {/* Create Loan button (only show if payment calculated) */}
-        {monthlyPayment > 0 && (
-            <TouchableOpacity style={styles.createButton} onPress={saveLoan}>
-                <Text style={styles.createButtonText}>Create Loan</Text>
-            </TouchableOpacity>
         )}
 
         {/* Detailed payment schedule section */}
@@ -356,17 +352,31 @@ export default function CreateLoanScreen() {
             </View>
         )}
 
-    </ScrollView>
-    </TouchableWithoutFeedback>;
+            </ScrollView>
+        </TouchableWithoutFeedback>
+        
+        {/* Fixed button at bottom */}
+        {monthlyPayment > 0 && (
+            <View style={styles.bottomButtonContainer}>
+                <TouchableOpacity style={styles.createButton} onPress={saveLoan}>
+                    <Text style={styles.createButtonText}>Create Loan</Text>
+                </TouchableOpacity>
+            </View>
+        )}
+    </View>;
 }
 
 // Styles for the create loan screen
 const styles = StyleSheet.create({
+    // Wrapper to hold scrollview and fixed button
+    wrapper: {
+        flex: 1,
+        backgroundColor: theme.colors.surface,
+    },
     // Main scrollable container
     container: {
         flex: 1,
         padding: theme.spacing.xl,
-        backgroundColor: theme.colors.surface,
     },
     // Page title
     title: {
@@ -375,15 +385,21 @@ const styles = StyleSheet.create({
         marginBottom: theme.spacing.xxl,
         color: theme.colors.textPrimary,
     },
+    // Bottom button container
+    bottomButtonContainer: {
+        padding: theme.spacing.xl,
+        paddingBottom: theme.spacing.xxl,
+        backgroundColor: theme.colors.surface,
+        borderTopWidth: 1,
+        borderTopColor: theme.colors.gray200,
+        ...theme.shadows.md,
+    },
     // Primary "Create Loan" button
     createButton: {
         backgroundColor: theme.colors.success,
         padding: theme.spacing.lg,
         borderRadius: theme.borderRadius.lg,
         alignItems: "center",
-        marginTop: theme.spacing.xxl,
-        marginBottom: theme.spacing.xxl,
-        ...theme.shadows.md,
     },
     createButtonText: {
         color: theme.colors.textInverse,

@@ -1,13 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Text, View, StyleSheet, ScrollView, TouchableOpacity, Alert } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useGlobalSearchParams, router } from 'expo-router';
 import { theme } from '../../../constants/theme';
-import EarlyPaymentList, { EarlyPayment } from "../../../components/EarlyPaymentList";
+import EarlyPaymentList, { EarlyPayment, EarlyPaymentListRef } from "../../../components/EarlyPaymentList";
 
 export default function PaymentsScreen() {
     const params = useGlobalSearchParams();
     const loanId = params.loanId as string;
+    const earlyPaymentListRef = useRef<EarlyPaymentListRef>(null);
     
     const [earlyPayments, setEarlyPayments] = useState<EarlyPayment[]>([]);
     const [startDate, setStartDate] = useState(new Date());
@@ -50,6 +51,7 @@ export default function PaymentsScreen() {
             if (loanIndex !== -1) {
                 loans[loanIndex].earlyPayments = earlyPayments;
                 await AsyncStorage.setItem('loans', JSON.stringify(loans));
+                earlyPaymentListRef.current?.collapseAll();
                 Alert.alert("Success", "Early payments saved successfully");
             }
         } catch (error) {
@@ -67,6 +69,7 @@ export default function PaymentsScreen() {
 
             {/* Early payments configuration */}
             <EarlyPaymentList
+                ref={earlyPaymentListRef}
                 payments={earlyPayments}
                 onPaymentsChange={setEarlyPayments}
                 loanStartDate={startDate}
