@@ -1,5 +1,5 @@
 import { Tabs, router } from "expo-router";
-import { TouchableOpacity, Text, Platform } from "react-native";
+import { TouchableOpacity, Text, Platform, View } from "react-native";
 import { theme } from "../../../constants/theme";
 
 export default function LoanTabLayout() {
@@ -8,48 +8,63 @@ export default function LoanTabLayout() {
             screenOptions={{
                 tabBarStyle: {
                     backgroundColor: theme.colors.background,
-                    borderTopWidth: 1,
-                    borderTopColor: theme.colors.gray200,
+                    borderTopWidth: 2,
+                    borderTopColor: theme.colors.primary,
                     paddingBottom: Platform.OS === 'ios' ? 20 : 8,
-                    paddingTop: 8,
-                    height: Platform.OS === 'ios' ? 85 : 60,
-                    elevation: 4,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: -2 },
-                    shadowOpacity: 0.08,
-                    shadowRadius: 3,
+                    paddingTop: 12,
+                    height: Platform.OS === 'ios' ? 90 : 65,
+                    elevation: 8,
+                    shadowColor: theme.colors.primary,
+                    shadowOffset: { width: 0, height: -4 },
+                    shadowOpacity: 0.15,
+                    shadowRadius: 8,
                 },
                 tabBarActiveTintColor: theme.colors.primary,
                 tabBarInactiveTintColor: theme.colors.gray400,
                 tabBarLabelStyle: {
                     fontSize: theme.fontSize.sm,
-                    fontWeight: theme.fontWeight.semibold,
+                    fontWeight: theme.fontWeight.bold,
+                    marginTop: 6,
+                },
+                tabBarIconStyle: {
                     marginTop: 4,
                 },
                 headerStyle: {
-                    backgroundColor: theme.colors.primary,
+                    backgroundColor: theme.colors.background,
                     elevation: 0,
                     shadowOpacity: 0,
+                    borderBottomWidth: 0,
                 },
-                headerTintColor: theme.colors.textInverse,
+                headerTintColor: theme.colors.textPrimary,
                 headerTitleStyle: {
                     fontWeight: theme.fontWeight.bold,
                     fontSize: theme.fontSize.lg,
+                    color: theme.colors.textPrimary,
                 },
                 headerLeft: () => (
                     <TouchableOpacity
                         onPress={() => router.push('/(tabs)')}
                         style={{ 
-                            marginLeft: 16,
-                            padding: 8,
+                            marginLeft: 12,
+                            paddingVertical: 6,
+                            paddingHorizontal: 12,
                             borderRadius: 8,
+                            backgroundColor: theme.colors.primaryGlass,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 4,
                         }}
                     >
                         <Text style={{ 
-                            color: theme.colors.textInverse, 
-                            fontSize: 24,
+                            color: theme.colors.textPrimary, 
+                            fontSize: 18,
                             fontWeight: theme.fontWeight.bold,
                         }}>←</Text>
+                        <Text style={{ 
+                            color: theme.colors.textPrimary, 
+                            fontSize: theme.fontSize.sm,
+                            fontWeight: theme.fontWeight.semibold,
+                        }}>Dashboard</Text>
                     </TouchableOpacity>
                 ),
             }}
@@ -58,7 +73,7 @@ export default function LoanTabLayout() {
                 name="overview" 
                 options={{ 
                     title: "Loan Details",
-                    tabBarLabel: "Overview",
+                    tabBarLabel: "Loan Details",
                     tabBarIcon: ({ color }) => (
                         <TabIcon icon="📊" color={color} />
                     ),
@@ -90,5 +105,5 @@ export default function LoanTabLayout() {
 
 // Simple emoji icon component for tabs
 function TabIcon({ icon, color }: { icon: string; color: string }) {
-    return <Text style={{ fontSize: 20, color }}>{icon}</Text>;
+    return <Text style={{ fontSize: 24, color }}>{icon}</Text>;
 }

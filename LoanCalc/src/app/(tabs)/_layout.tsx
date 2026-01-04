@@ -27,14 +27,16 @@ export default function TabLayout() {
                     marginTop: 4,
                 },
                 headerStyle: {
-                    backgroundColor: theme.colors.primary,
+                    backgroundColor: theme.colors.background,
                     elevation: 0,
                     shadowOpacity: 0,
+                    borderBottomWidth: 0,
                 },
-                headerTintColor: theme.colors.textInverse,
+                headerTintColor: theme.colors.textPrimary,
                 headerTitleStyle: {
                     fontWeight: theme.fontWeight.bold,
                     fontSize: theme.fontSize.xl,
+                    color: theme.colors.textPrimary,
                 },
             }}
         >
@@ -67,7 +69,56 @@ export default function TabLayout() {
                             }}
                         >
                             <Text style={{ 
-                                color: theme.colors.textInverse, 
+                                color: theme.colors.textPrimary, 
+                                fontSize: 24,
+                                fontWeight: theme.fontWeight.bold,
+                            }}>←</Text>
+                        </TouchableOpacity>
+                    ),
+                    tabBarStyle: { display: 'none' },
+                    href: null
+                }} 
+            />
+            <Tabs.Screen 
+                name="addExtraPayment" 
+                options={{ 
+                    title: "Add Extra Payment",
+                    href: null,
+                    headerLeft: () => (
+                        <TouchableOpacity
+                            onPress={() => router.push('/(tabs)')}
+                            style={{ 
+                                marginLeft: 16,
+                                padding: 8,
+                                borderRadius: 8,
+                            }}
+                        >
+                            <Text style={{ 
+                                color: theme.colors.textPrimary, 
+                                fontSize: 24,
+                                fontWeight: theme.fontWeight.bold,
+                            }}>←</Text>
+                        </TouchableOpacity>
+                    ),
+                    tabBarStyle: { display: 'none' }
+                }} 
+            />
+            <Tabs.Screen 
+                name="about" 
+                options={{ 
+                    title: "About & Legal",
+                    href: null,
+                    headerLeft: () => (
+                        <TouchableOpacity
+                            onPress={() => router.push('/(tabs)')}
+                            style={{ 
+                                marginLeft: 16,
+                                padding: 8,
+                                borderRadius: 8,
+                            }}
+                        >
+                            <Text style={{ 
+                                color: theme.colors.textPrimary, 
                                 fontSize: 24,
                                 fontWeight: theme.fontWeight.bold,
                             }}>←</Text>

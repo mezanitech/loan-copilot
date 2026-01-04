@@ -1,15 +1,17 @@
-// Professional color palette and design tokens
+// Professional color palette and design tokens - Glassy theme
 export const theme = {
     colors: {
-        // Primary colors
-        primary: '#2563EB',      // Modern blue
-        primaryDark: '#1E40AF',
-        primaryLight: '#3B82F6',
+        // Primary colors - light and airy for glass effect
+        primary: '#60A5FA',      // Soft blue
+        primaryDark: '#3B82F6',
+        primaryLight: '#93C5FD',
+        primaryGlass: 'rgba(96, 165, 250, 0.15)',  // Semi-transparent primary
         
         // Success/Money colors
         success: '#10B981',
         successDark: '#059669',
         successLight: '#34D399',
+        successGlass: 'rgba(16, 185, 129, 0.15)',
         
         // Neutral colors
         gray50: '#F9FAFB',
@@ -24,16 +26,21 @@ export const theme = {
         gray900: '#111827',
         
         // Semantic colors
-        background: '#FFFFFF',
-        surface: '#F9FAFB',
+        background: '#F8FAFC',      // Very light background
+        surface: '#FFFFFF',         // White cards
+        surfaceGlass: 'rgba(255, 255, 255, 0.7)',  // Frosted glass
         error: '#EF4444',
         warning: '#F59E0B',
         info: '#3B82F6',
         
+        // Glass effect overlays
+        glassOverlay: 'rgba(255, 255, 255, 0.4)',
+        glassBorder: 'rgba(255, 255, 255, 0.6)',
+        
         // Text colors
-        textPrimary: '#111827',
-        textSecondary: '#6B7280',
-        textTertiary: '#9CA3AF',
+        textPrimary: '#0F172A',
+        textSecondary: '#64748B',
+        textTertiary: '#94A3B8',
         textInverse: '#FFFFFF',
     },
     
@@ -48,10 +55,10 @@ export const theme = {
     },
     
     borderRadius: {
-        sm: 6,
-        md: 8,
-        lg: 12,
-        xl: 16,
+        sm: 8,
+        md: 12,
+        lg: 16,
+        xl: 20,
         full: 9999,
     },
     
@@ -75,25 +82,32 @@ export const theme = {
     
     shadows: {
         sm: {
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 1 },
-            shadowOpacity: 0.05,
-            shadowRadius: 2,
-            elevation: 1,
-        },
-        md: {
-            shadowColor: '#000',
+            shadowColor: '#60A5FA',
             shadowOffset: { width: 0, height: 2 },
             shadowOpacity: 0.08,
             shadowRadius: 4,
             elevation: 2,
         },
-        lg: {
-            shadowColor: '#000',
+        md: {
+            shadowColor: '#60A5FA',
             shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.1,
+            shadowOpacity: 0.12,
             shadowRadius: 8,
-            elevation: 4,
+            elevation: 3,
+        },
+        lg: {
+            shadowColor: '#60A5FA',
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.15,
+            shadowRadius: 16,
+            elevation: 5,
+        },
+        glass: {
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.04,
+            shadowRadius: 24,
+            elevation: 2,
         },
     },
 };

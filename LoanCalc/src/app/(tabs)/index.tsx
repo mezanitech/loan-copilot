@@ -157,21 +157,32 @@ export default function DashboardScreen() {
         label: loan.name || `Loan ${index + 1}`
     }));
 
-    return <View style={styles.wrapper}>
-        <ScrollView style={styles.container}>
+    return (
+        <View style={styles.wrapper}>
+            <ScrollView style={styles.container}>
         {/* Page header */}
         <View style={styles.header}>
             <View>
                 <Text style={styles.title}>My Loans</Text>
                 <Text style={styles.subtitle}>Manage your financial journey</Text>
             </View>
-            <TouchableOpacity 
-                style={styles.debugButton}
-                onPress={clearAllData}
-                activeOpacity={0.7}
-            >
-                <Text style={styles.debugButtonText}>🗑️</Text>
-            </TouchableOpacity>
+            <View style={styles.headerButtons}>
+                <Link href="/(tabs)/about" asChild>
+                    <TouchableOpacity 
+                        style={styles.aboutButton}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={styles.aboutButtonText}>ℹ️</Text>
+                    </TouchableOpacity>
+                </Link>
+                <TouchableOpacity 
+                    style={styles.debugButton}
+                    onPress={clearAllData}
+                    activeOpacity={0.7}
+                >
+                    <Text style={styles.debugButtonText}>🗑️</Text>
+                </TouchableOpacity>
+            </View>
         </View>
 
         {/* Summary cards if loans exist */}
@@ -223,6 +234,15 @@ export default function DashboardScreen() {
                     </View>
                 </View>
             </View>
+        )}
+
+        {/* Extra Payment Button - shows only when loans exist */}
+        {loans.length > 0 && (
+            <Link href="/(tabs)/addExtraPayment" asChild>
+                <TouchableOpacity style={styles.extraPaymentButton} activeOpacity={0.8}>
+                    <Text style={styles.extraPaymentButtonText}>💰 Add Extra Payment</Text>
+                </TouchableOpacity>
+            </Link>
         )}
 
         {/* Show message if no loans exist */}
@@ -326,7 +346,8 @@ export default function DashboardScreen() {
                 </TouchableOpacity>
             </Link>
         </View>
-    </View>;
+        </View>
+    );
 }
 
 // Styles for the dashboard screen
@@ -347,6 +368,21 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'flex-start',
         marginBottom: theme.spacing.xxl,
+    },
+    headerButtons: {
+        flexDirection: 'row',
+        gap: theme.spacing.sm,
+    },
+    aboutButton: {
+        backgroundColor: theme.colors.gray200,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    aboutButtonText: {
+        fontSize: 18,
     },
     debugButton: {
         backgroundColor: theme.colors.gray200,
@@ -378,10 +414,12 @@ const styles = StyleSheet.create({
     },
     summaryCard: {
         flex: 1,
-        backgroundColor: theme.colors.background,
+        backgroundColor: theme.colors.surfaceGlass,
         padding: theme.spacing.md,
         borderRadius: theme.borderRadius.lg,
-        ...theme.shadows.sm,
+        borderWidth: 1,
+        borderColor: theme.colors.glassBorder,
+        ...theme.shadows.glass,
     },
     summaryLabel: {
         fontSize: theme.fontSize.xs,
@@ -419,6 +457,19 @@ const styles = StyleSheet.create({
         color: theme.colors.textSecondary,
         flex: 1,
     },
+    // Extra payment button
+    extraPaymentButton: {
+        backgroundColor: theme.colors.primary,
+        padding: theme.spacing.md,
+        borderRadius: theme.borderRadius.lg,
+        alignItems: "center",
+        marginBottom: theme.spacing.lg,
+    },
+    extraPaymentButtonText: {
+        color: theme.colors.textInverse,
+        fontSize: theme.fontSize.base,
+        fontWeight: theme.fontWeight.semibold,
+    },
     // Bottom button container
     bottomButtonContainer: {
         padding: theme.spacing.xl,
@@ -434,6 +485,9 @@ const styles = StyleSheet.create({
         padding: theme.spacing.lg,
         borderRadius: theme.borderRadius.lg,
         alignItems: "center",
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.3)',
+        ...theme.shadows.md,
     },
     addButtonText: {
         color: theme.colors.textInverse,
@@ -469,10 +523,12 @@ const styles = StyleSheet.create({
     },
     // Individual loan card styling
     loanCard: {
-        backgroundColor: theme.colors.background,
+        backgroundColor: theme.colors.surfaceGlass,
         borderRadius: theme.borderRadius.lg,
         padding: theme.spacing.xl,
-        ...theme.shadows.md,
+        borderWidth: 1,
+        borderColor: theme.colors.glassBorder,
+        ...theme.shadows.glass,
     },
     // Header section of loan card (amount and delete button)
     loanHeader: {

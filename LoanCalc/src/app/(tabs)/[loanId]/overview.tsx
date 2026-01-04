@@ -7,6 +7,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Import routing utilities from expo-router
 import { router, useGlobalSearchParams, useFocusEffect } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { theme } from '../../../constants/theme';
 // Import custom reusable components
 import InputField from "../../../components/InputField";
@@ -22,6 +24,7 @@ type EarlyPayment = {
     amount: string;
     month: string;
     frequency?: string;
+    name?: string;
 };
 
 export default function LoanOverviewScreen() {
@@ -306,6 +309,212 @@ export default function LoanOverviewScreen() {
         }
     };
 
+    // Test PDF generation function
+    const generateTestPDF = async () => {
+        try {
+            const html = `
+                <html>
+                    <head>
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <style>
+                            body { 
+                                font-family: Arial, sans-serif; 
+                                padding: 30px;
+                                color: #333;
+                            }
+                            h1 { 
+                                color: #60A5FA; 
+                                border-bottom: 3px solid #60A5FA;
+                                padding-bottom: 10px;
+                                margin-bottom: 20px;
+                            }
+                            h2 {
+                                color: #3B82F6;
+                                margin-top: 25px;
+                                margin-bottom: 15px;
+                            }
+                            .info-row {
+                                display: flex;
+                                justify-content: space-between;
+                                padding: 10px 0;
+                                border-bottom: 1px solid #E5E7EB;
+                            }
+                            .label {
+                                font-weight: bold;
+                                color: #6B7280;
+                            }
+                            .value {
+                                color: #111827;
+                                font-weight: 600;
+                            }
+                            .highlight {
+                                background-color: #EFF6FF;
+                                padding: 15px;
+                                border-radius: 8px;
+                                margin: 15px 0;
+                            }
+                            .savings {
+                                background-color: #D1FAE5;
+                                padding: 15px;
+                                border-radius: 8px;
+                                margin: 15px 0;
+                                border-left: 4px solid #10B981;
+                            }
+                            table {
+                                width: 100%;
+                                border-collapse: collapse;
+                                margin-top: 15px;
+                            }
+                            th {
+                                background-color: #60A5FA;
+                                color: white;
+                                padding: 10px;
+                                text-align: left;
+                            }
+                            td {
+                                padding: 8px;
+                                border-bottom: 1px solid #E5E7EB;
+                            }
+                            .footer {
+                                margin-top: 30px;
+                                padding-top: 20px;
+                                border-top: 2px solid #E5E7EB;
+                                color: #6B7280;
+                                font-size: 12px;
+                                text-align: center;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <h1>💼 ${loanName || 'Loan'} - Detailed Report</h1>
+                        
+                        <h2>📊 Loan Details</h2>
+                        <div class="info-row">
+                            <span class="label">Loan Amount:</span>
+                            <span class="value">$${parseFloat(loanAmount || '0').toLocaleString()}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="label">Interest Rate:</span>
+                            <span class="value">${interestRate}%</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="label">Loan Term:</span>
+                            <span class="value">${term} ${termUnit}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="label">Start Date:</span>
+                            <span class="value">${date.toLocaleDateString()}</span>
+                        </div>
+                        
+                        <h2>💰 Payment Summary</h2>
+                        <div class="highlight">
+                            <div class="info-row">
+                                <span class="label">Monthly Payment:</span>
+                                <span class="value">$${monthlyPayment.toFixed(2)}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="label">Total Payment:</span>
+                                <span class="value">$${actualTotalPayment.toFixed(2)}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="label">Total Interest:</span>
+                                <span class="value">$${totalInterest.toFixed(2)}</span>
+                            </div>
+                        </div>
+                        
+                        ${earlyPayments.length > 0 ? `
+                            <h2>🎉 Savings from Extra Payments</h2>
+                            <div class="savings">
+                                <div class="info-row">
+                                    <span class="label">💰 Interest Saved:</span>
+                                    <span class="value">$${interestSaved.toFixed(2)}</span>
+                                </div>
+                                <div class="info-row">
+                                    <span class="label">⚡ Time Saved:</span>
+                                    <span class="value">${periodDecrease >= 12 
+                                        ? `${Math.floor(periodDecrease / 12)} year${Math.floor(periodDecrease / 12) !== 1 ? 's' : ''}${periodDecrease % 12 > 0 ? ` ${periodDecrease % 12} month${periodDecrease % 12 !== 1 ? 's' : ''}` : ''}`
+                                        : `${periodDecrease} month${periodDecrease !== 1 ? 's' : ''}`
+                                    }</span>
+                                </div>
+                                <div class="info-row">
+                                    <span class="label">🎊 New Payoff Date:</span>
+                                    <span class="value">${(() => {
+                                        const finalDate = new Date(date);
+                                        finalDate.setMonth(finalDate.getMonth() + paymentSchedule.length - 1);
+                                        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                                        return `${monthNames[finalDate.getMonth()]} ${finalDate.getFullYear()}`;
+                                    })()}</span>
+                                </div>
+                            </div>
+                            
+                            <h2>💸 Extra Payments</h2>
+                            <table>
+                                <tr>
+                                    <th>Payment Name</th>
+                                    <th>Amount</th>
+                                    <th>Month</th>
+                                    <th>Type</th>
+                                </tr>
+                                ${earlyPayments.map(payment => `
+                                    <tr>
+                                        <td>${payment.name || 'Extra Payment'}</td>
+                                        <td>$${parseFloat(payment.amount).toLocaleString()}</td>
+                                        <td>Payment #${payment.month}</td>
+                                        <td>${payment.type === 'one-time' ? 'One-time' : `Recurring (every ${payment.frequency} months)`}</td>
+                                    </tr>
+                                `).join('')}
+                            </table>
+                        ` : ''}
+                        
+                        <h2>📅 Payment Schedule</h2>
+                        <table>
+                            <tr>
+                                <th>#</th>
+                                <th>Date</th>
+                                <th>Payment</th>
+                                <th>Principal</th>
+                                <th>Interest</th>
+                                <th>Balance</th>
+                            </tr>
+                            ${paymentSchedule.map((payment, index) => {
+                                const paymentDate = new Date(date);
+                                paymentDate.setMonth(paymentDate.getMonth() + index);
+                                const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                                const dateStr = `${monthNames[paymentDate.getMonth()]} ${paymentDate.getFullYear()}`;
+                                
+                                return `
+                                    <tr style="${index % 2 === 0 ? 'background-color: #F9FAFB;' : ''}">
+                                        <td>${index + 1}</td>
+                                        <td>${dateStr}</td>
+                                        <td>$${payment.payment.toFixed(2)}</td>
+                                        <td>$${payment.principal.toFixed(2)}</td>
+                                        <td>$${payment.interest.toFixed(2)}</td>
+                                        <td>$${payment.balance.toFixed(2)}</td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </table>
+                        
+                        <div class="footer">
+                            <p>Generated by Loan Copilot on ${new Date().toLocaleDateString()}</p>
+                            <p>⚠️ This is for informational purposes only. Please verify all calculations with your lender.</p>
+                        </div>
+                    </body>
+                </html>
+            `;
+            
+            const { uri } = await Print.printToFileAsync({ html });
+            await Sharing.shareAsync(uri, { 
+                mimeType: 'application/pdf',
+                dialogTitle: 'Share Loan Report'
+            });
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            Alert.alert("Error", "Failed to generate PDF: " + errorMessage);
+            console.error(error);
+        }
+    };
+
     // Calculate payment amounts based on current inputs
     const { monthlyPayment, totalPayment } = calculatePayment();
     // Generate payment schedules (with and without early payments)
@@ -345,8 +554,10 @@ export default function LoanOverviewScreen() {
     // Dismiss keyboard when tapping outside
     return <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <ScrollView style={styles.container}>
-            {/* Page title */}
-            <Text style={styles.title}>📊 Your Loan Dashboard</Text>
+            {/* Export button */}
+            <TouchableOpacity style={styles.exportButton} onPress={generateTestPDF}>
+                <Text style={styles.exportButtonText}>📄 Export Report</Text>
+            </TouchableOpacity>
 
             {/* Loan name input */}
             <InputField
@@ -488,11 +699,20 @@ export default function LoanOverviewScreen() {
                             </View>
                         )}
                         
+                        {earlyPayments.length > 0 && (
+                            <TouchableOpacity 
+                                style={styles.addAnotherPaymentButton}
+                                onPress={() => router.push(`/(tabs)/${loanId}/payments`)}
+                            >
+                                <Text style={styles.addAnotherPaymentButtonText}>+ Add Another Early Payment</Text>
+                            </TouchableOpacity>
+                        )}
+                        
                         <TouchableOpacity 
-                            style={styles.scheduleLink}
+                            style={styles.subtleLink}
                             onPress={() => router.push(`/(tabs)/${loanId}/schedule`)}
                         >
-                            <Text style={styles.scheduleLinkText}>📋 View Full Payment Schedule →</Text>
+                            <Text style={styles.subtleLinkText}>View detailed schedule</Text>
                         </TouchableOpacity>
                     </View>
                     
@@ -537,8 +757,14 @@ const styles = StyleSheet.create({
     title: {
         fontSize: theme.fontSize.xxl,
         fontWeight: theme.fontWeight.bold,
-        marginBottom: theme.spacing.xxl,
         color: theme.colors.textPrimary,
+        flex: 1,
+    },
+    headerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: theme.spacing.xxl,
     },
     // "Save Changes" button
     updateButton: {
@@ -555,6 +781,22 @@ const styles = StyleSheet.create({
         fontSize: theme.fontSize.lg,
         fontWeight: theme.fontWeight.bold,
     },
+    // Test PDF button
+    testPdfButton: {
+        backgroundColor: theme.colors.info,
+        padding: theme.spacing.lg,
+        borderRadius: theme.borderRadius.lg,
+        alignItems: "center",
+        marginBottom: theme.spacing.xxxl,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.3)',
+        ...theme.shadows.md,
+    },
+    testPdfButtonText: {
+        color: theme.colors.textInverse,
+        fontSize: theme.fontSize.lg,
+        fontWeight: theme.fontWeight.bold,
+    },
     // Section headers
     sectionTitle: {
         fontSize: theme.fontSize.xl,
@@ -566,11 +808,13 @@ const styles = StyleSheet.create({
     savingsContainer: {
         marginTop: theme.spacing.xl,
         padding: theme.spacing.xl,
-        backgroundColor: theme.colors.background,
+        backgroundColor: theme.colors.surfaceGlass,
         borderRadius: theme.borderRadius.lg,
+        borderWidth: 1,
+        borderColor: theme.colors.glassBorder,
         borderLeftWidth: 4,
         borderLeftColor: theme.colors.success,
-        ...theme.shadows.md,
+        ...theme.shadows.glass,
     },
     // Row for each savings metric
     savingsRow: {
@@ -599,9 +843,9 @@ const styles = StyleSheet.create({
         color: theme.colors.textPrimary,
     },
     dateButton: {
-        backgroundColor: theme.colors.background,
-        borderWidth: 1.5,
-        borderColor: theme.colors.gray200,
+        backgroundColor: theme.colors.surfaceGlass,
+        borderWidth: 1,
+        borderColor: theme.colors.glassBorder,
         borderRadius: theme.borderRadius.md,
         padding: theme.spacing.md,
         marginBottom: theme.spacing.lg,
@@ -617,11 +861,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     datePickerContainer: {
-        backgroundColor: theme.colors.background,
+        backgroundColor: theme.colors.surfaceGlass,
         borderRadius: theme.borderRadius.lg,
+        borderWidth: 1,
+        borderColor: theme.colors.glassBorder,
         padding: theme.spacing.xl,
         margin: theme.spacing.xl,
-        ...theme.shadows.lg,
+        ...theme.shadows.glass,
     },
     closeButton: {
         backgroundColor: theme.colors.primary,
@@ -635,14 +881,27 @@ const styles = StyleSheet.create({
         fontSize: theme.fontSize.base,
         fontWeight: theme.fontWeight.semibold,
     },
-    scheduleLink: {
+    subtleLink: {
+        padding: theme.spacing.sm,
+        alignItems: "center",
+        marginTop: theme.spacing.md,
+    },
+    subtleLinkText: {
+        color: theme.colors.textSecondary,
+        fontSize: theme.fontSize.sm,
+        textDecorationLine: 'underline',
+    },
+    addAnotherPaymentButton: {
         backgroundColor: theme.colors.primary,
         padding: theme.spacing.md,
         borderRadius: theme.borderRadius.md,
         alignItems: "center",
         marginTop: theme.spacing.lg,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.3)',
+        ...theme.shadows.md,
     },
-    scheduleLinkText: {
+    addAnotherPaymentButtonText: {
         color: theme.colors.textInverse,
         fontSize: theme.fontSize.base,
         fontWeight: theme.fontWeight.semibold,
@@ -664,11 +923,34 @@ const styles = StyleSheet.create({
         paddingHorizontal: theme.spacing.xl,
         paddingVertical: theme.spacing.md,
         borderRadius: theme.borderRadius.md,
-        ...theme.shadows.sm,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.3)',
+        ...theme.shadows.md,
     },
     addPaymentsButtonText: {
         color: theme.colors.textInverse,
         fontSize: theme.fontSize.base,
         fontWeight: theme.fontWeight.semibold,
+    },
+    exportButton: {
+        backgroundColor: 'rgba(96, 165, 250, 0.1)',
+        paddingHorizontal: theme.spacing.md,
+        paddingVertical: theme.spacing.sm,
+        borderRadius: theme.borderRadius.lg,
+        alignItems: "center",
+        borderWidth: 2,
+        borderColor: 'rgba(96, 165, 250, 0.3)',
+        shadowColor: '#60A5FA',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 3,
+        alignSelf: 'flex-end',
+        marginBottom: theme.spacing.lg,
+    },
+    exportButtonText: {
+        color: theme.colors.primary,
+        fontSize: theme.fontSize.base,
+        fontWeight: theme.fontWeight.bold,
     },
 });

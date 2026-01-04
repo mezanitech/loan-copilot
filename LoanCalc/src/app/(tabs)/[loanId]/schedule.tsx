@@ -9,6 +9,7 @@ import { useGlobalSearchParams, useFocusEffect } from 'expo-router';
 // Import custom components
 import PaymentDetailCard from "../../../components/PaymentDetailCard";
 import { EarlyPayment } from "../../../components/EarlyPaymentList";
+import { theme } from '../../../constants/theme';
 
 
 export default function LoanScheduleScreen() {
@@ -179,9 +180,6 @@ export default function LoanScheduleScreen() {
 
     return (
         <ScrollView style={styles.container}>
-            {/* Page title */}
-            <Text style={styles.title}>Payment Schedule</Text>
-            
             {/* Show payment schedule or empty message */}
             {paymentSchedule.length > 0 ? (
                 <View style={styles.paymentDetailsContainer}>
@@ -240,47 +238,51 @@ const styles = StyleSheet.create({
     // Main scrollable container
     container: {
         flex: 1,
-        padding: 20,
+        padding: theme.spacing.xl,
+        backgroundColor: theme.colors.surface,
     },
     // Page title
     title: {
-        fontSize: 24,
-        fontWeight: "700",
-        marginBottom: 20,
-        color: "#333",
+        fontSize: theme.fontSize.xxl,
+        fontWeight: theme.fontWeight.bold,
+        marginBottom: theme.spacing.xl,
+        color: theme.colors.textPrimary,
     },
     // Container for all payment cards
     paymentDetailsContainer: {
-        marginBottom: 20,
+        marginBottom: theme.spacing.xl,
     },
     // Separator between first 5 and last 5 payments
     separator: {
         alignItems: "center",
-        paddingVertical: 8,
+        paddingVertical: theme.spacing.sm,
     },
     separatorText: {
-        fontSize: 20,
-        color: "#999",
-        fontWeight: "700",
+        fontSize: theme.fontSize.xl,
+        color: theme.colors.textTertiary,
+        fontWeight: theme.fontWeight.bold,
     },
-    // Blue "Show All" / "Show Less" button
+    // "Show All" / "Show Less" button
     expandButton: {
-        backgroundColor: "#007AFF",
-        padding: 14,
-        borderRadius: 8,
+        backgroundColor: theme.colors.primary,
+        padding: theme.spacing.md,
+        borderRadius: theme.borderRadius.lg,
         alignItems: "center",
-        marginTop: 12,
+        marginTop: theme.spacing.md,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.3)',
+        ...theme.shadows.md,
     },
     expandButtonText: {
-        color: "#fff",
-        fontSize: 16,
-        fontWeight: "600",
+        color: theme.colors.textInverse,
+        fontSize: theme.fontSize.base,
+        fontWeight: theme.fontWeight.semibold,
     },
     // Message shown when no schedule is available
     emptyText: {
-        fontSize: 16,
-        color: "#666",
+        fontSize: theme.fontSize.base,
+        color: theme.colors.textSecondary,
         textAlign: "center",
-        marginTop: 40,
+        marginTop: theme.spacing.xxxl,
     },
 });

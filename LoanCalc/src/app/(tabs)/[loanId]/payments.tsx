@@ -62,7 +62,6 @@ export default function PaymentsScreen() {
 
     return (
         <ScrollView style={styles.container}>
-            <Text style={styles.title}>💰 Extra Payments</Text>
             <Text style={styles.description}>
                 Add extra payments to pay off your loan faster and save on interest!
             </Text>
@@ -110,16 +109,18 @@ const styles = StyleSheet.create({
         lineHeight: 22,
     },
     infoBox: {
-        backgroundColor: theme.colors.background,
+        backgroundColor: theme.colors.surfaceGlass,
         padding: theme.spacing.lg,
         borderRadius: theme.borderRadius.lg,
+        borderWidth: 1,
+        borderColor: theme.colors.glassBorder,
         borderLeftWidth: 4,
         borderLeftColor: theme.colors.info,
         marginTop: theme.spacing.xl,
         marginBottom: theme.spacing.xl,
         flexDirection: 'row',
         alignItems: 'flex-start',
-        ...theme.shadows.sm,
+        ...theme.shadows.glass,
     },
     infoIcon: {
         fontSize: theme.fontSize.xl,
@@ -137,6 +138,8 @@ const styles = StyleSheet.create({
         borderRadius: theme.borderRadius.lg,
         alignItems: "center",
         marginBottom: theme.spacing.xxxl,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.3)',
         ...theme.shadows.md,
     },
     saveButtonText: {

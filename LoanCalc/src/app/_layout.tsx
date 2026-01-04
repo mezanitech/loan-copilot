@@ -3,11 +3,14 @@ import { theme } from "../constants/theme";
 import { useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import OnboardingSlider from "../components/OnboardingSlider";
+import FirstLaunchDisclaimer from "../components/FirstLaunchDisclaimer";
 
 const ONBOARDING_KEY = "hasSeenOnboarding";
+const DISCLAIMER_ACCEPTED_KEY = "@disclaimer_accepted";
 
 export default function RootLayout() {
     const [showOnboarding, setShowOnboarding] = useState(false);
+    const [showDisclaimer, setShowDisclaimer] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
@@ -17,8 +20,12 @@ export default function RootLayout() {
     const checkOnboarding = async () => {
         try {
             const hasSeenOnboarding = await AsyncStorage.getItem(ONBOARDING_KEY);
+            const hasAcceptedDisclaimer = await AsyncStorage.getItem(DISCLAIMER_ACCEPTED_KEY);
+            
             if (!hasSeenOnboarding) {
                 setShowOnboarding(true);
+            } else if (!hasAcceptedDisclaimer) {
+                setShowDisclaimer(true);
             }
         } catch (error) {
             console.error("Error checking onboarding status:", error);
@@ -31,8 +38,22 @@ export default function RootLayout() {
         try {
             await AsyncStorage.setItem(ONBOARDING_KEY, "true");
             setShowOnboarding(false);
+            // Show disclaimer after onboarding completes
+            const hasAcceptedDisclaimer = await AsyncStorage.getItem(DISCLAIMER_ACCEPTED_KEY);
+            if (!hasAcceptedDisclaimer) {
+                setShowDisclaimer(true);
+            }
         } catch (error) {
             console.error("Error saving onboarding status:", error);
+        }
+    };
+
+    const handleDisclaimerAccept = async () => {
+        try {
+            await AsyncStorage.setItem(DISCLAIMER_ACCEPTED_KEY, "true");
+            setShowDisclaimer(false);
+        } catch (error) {
+            console.error("Error saving disclaimer acceptance:", error);
         }
     };
 
@@ -68,6 +89,10 @@ export default function RootLayout() {
             <OnboardingSlider 
                 visible={showOnboarding} 
                 onComplete={handleOnboardingComplete} 
+            />
+            <FirstLaunchDisclaimer 
+                visible={showDisclaimer}
+                onAccept={handleDisclaimerAccept} 
             />
         </>
     );
