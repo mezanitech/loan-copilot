@@ -3,8 +3,11 @@ import { Link, useFocusEffect } from "expo-router";
 import { useState, useCallback } from "react";
 import { Text, View, StyleSheet, ScrollView, TouchableOpacity, Alert } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { theme } from '../../constants/theme';
 import PieChart from '../../components/PieChart';
+import OnboardingSlider from '../../components/OnboardingSlider';
 
 // Define the structure of a Loan object
 type Loan = {
@@ -24,6 +27,7 @@ export default function DashboardScreen() {
     // State to store all loans
     const [loans, setLoans] = useState<Loan[]>([]);
     const [expandedLoans, setExpandedLoans] = useState<Set<string>>(new Set());
+    const [showOnboarding, setShowOnboarding] = useState(false);
 
     // Function to load loans from device storage
     const loadLoans = async () => {
@@ -66,6 +70,162 @@ export default function DashboardScreen() {
             newExpanded.add(id);
         }
         setExpandedLoans(newExpanded);
+    };
+
+    // Export all loans to PDF
+    const exportAllLoansPDF = async () => {
+        if (loans.length === 0) {
+            Alert.alert("No Loans", "Add some loans first to export a report.");
+            return;
+        }
+
+        Alert.alert(
+            "📄 Export Portfolio",
+            "This will export a summary of all your loans.\n\n💡 Tip: You can also export detailed reports for individual loans from their overview page.",
+            [
+                { text: "Cancel", style: "cancel" },
+                { 
+                    text: "Export All", 
+                    onPress: async () => {
+                        try {
+                            const html = `
+                <html>
+                    <head>
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <style>
+                            body { 
+                                font-family: Arial, sans-serif; 
+                                padding: 30px;
+                                color: #333;
+                            }
+                            h1 { 
+                                color: #60A5FA; 
+                                border-bottom: 3px solid #60A5FA;
+                                padding-bottom: 10px;
+                                margin-bottom: 20px;
+                            }
+                            h2 {
+                                color: #3B82F6;
+                                margin-top: 25px;
+                                margin-bottom: 15px;
+                            }
+                            .summary-box {
+                                background-color: #EFF6FF;
+                                padding: 20px;
+                                border-radius: 8px;
+                                margin: 20px 0;
+                            }
+                            .summary-row {
+                                display: flex;
+                                justify-content: space-between;
+                                padding: 12px 0;
+                                border-bottom: 1px solid #BFDBFE;
+                            }
+                            .summary-label {
+                                font-weight: bold;
+                                color: #1E40AF;
+                            }
+                            .summary-value {
+                                color: #1E3A8A;
+                                font-weight: 600;
+                                font-size: 18px;
+                            }
+                            table {
+                                width: 100%;
+                                border-collapse: collapse;
+                                margin-top: 15px;
+                            }
+                            th {
+                                background-color: #60A5FA;
+                                color: white;
+                                padding: 12px;
+                                text-align: left;
+                            }
+                            td {
+                                padding: 10px;
+                                border-bottom: 1px solid #E5E7EB;
+                            }
+                            tr:nth-child(even) {
+                                background-color: #F9FAFB;
+                            }
+                            .footer {
+                                margin-top: 30px;
+                                padding-top: 20px;
+                                border-top: 2px solid #E5E7EB;
+                                color: #6B7280;
+                                font-size: 12px;
+                                text-align: center;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <h1>💼 Loan Portfolio Summary</h1>
+                        
+                        <div class="summary-box">
+                            <div class="summary-row">
+                                <span class="summary-label">Total Loans:</span>
+                                <span class="summary-value">${loans.length}</span>
+                            </div>
+                            <div class="summary-row">
+                                <span class="summary-label">Total Borrowed:</span>
+                                <span class="summary-value">$${totalBorrowed.toLocaleString()}</span>
+                            </div>
+                            <div class="summary-row">
+                                <span class="summary-label">Total Remaining:</span>
+                                <span class="summary-value">$${totalRemaining.toLocaleString()}</span>
+                            </div>
+                            <div class="summary-row">
+                                <span class="summary-label">Total Monthly Payment:</span>
+                                <span class="summary-value">$${totalMonthlyPayment.toLocaleString()}</span>
+                            </div>
+                        </div>
+                        
+                        <h2>📋 All Loans</h2>
+                        <table>
+                            <tr>
+                                <th>Loan Name</th>
+                                <th>Amount</th>
+                                <th>Rate</th>
+                                <th>Term</th>
+                                <th>Monthly Payment</th>
+                            </tr>
+                            ${loans.map(loan => `
+                                <tr>
+                                    <td><strong>${loan.name || 'Unnamed Loan'}</strong></td>
+                                    <td>$${loan.amount.toLocaleString()}</td>
+                                    <td>${loan.interestRate}%</td>
+                                    <td>${loan.term} ${loan.termUnit}</td>
+                                    <td>$${loan.monthlyPayment.toFixed(2)}</td>
+                                </tr>
+                            `).join('')}
+                        </table>
+                        
+                        <div class="footer">
+                            <p>Generated by Loan Copilot on ${new Date().toLocaleDateString()}</p>
+                            <p>⚠️ This is for informational purposes only. Please verify all calculations with your lender.</p>
+                        </div>
+                    </body>
+                </html>
+            `;
+            
+            const { uri } = await Print.printToFileAsync({ html });
+            const shareResult = await Sharing.shareAsync(uri, { 
+                mimeType: 'application/pdf',
+                dialogTitle: 'Share Loan Portfolio Summary'
+            });
+            // User canceled sharing - this is normal, don't show error
+                        } catch (error) {
+                            const errorMessage = error instanceof Error ? error.message : String(error);
+                            // Don't show alert if user just dismissed/canceled
+                            if (!errorMessage.includes('cancel') && !errorMessage.includes('dismiss')) {
+                                Alert.alert("Error", "Failed to generate PDF: " + errorMessage);
+                            }
+                            console.log('PDF generation/sharing:', error);
+                        }
+                    }
+                }
+            ]
+        );
     };
 
     // Debug function to clear all data
@@ -167,6 +327,22 @@ export default function DashboardScreen() {
                 <Text style={styles.subtitle}>Manage your financial journey</Text>
             </View>
             <View style={styles.headerButtons}>
+                {loans.length > 0 && (
+                    <TouchableOpacity 
+                        style={styles.exportButton}
+                        onPress={exportAllLoansPDF}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={styles.exportButtonText}>📄</Text>
+                    </TouchableOpacity>
+                )}
+                <TouchableOpacity 
+                    style={styles.tutorialButton}
+                    onPress={() => setShowOnboarding(true)}
+                    activeOpacity={0.7}
+                >
+                    <Text style={styles.tutorialButtonText}>📚</Text>
+                </TouchableOpacity>
                 <Link href="/(tabs)/about" asChild>
                     <TouchableOpacity 
                         style={styles.aboutButton}
@@ -205,7 +381,7 @@ export default function DashboardScreen() {
                 </View>
                 <View style={styles.summaryCard}>
                     <Text style={styles.summaryLabel}>Remaining</Text>
-                    <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>${totalRemaining.toLocaleString()}</Text>
+                    <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>${totalRemaining.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</Text>
                     <View style={styles.pieChartWrapper}>
                         <PieChart data={remainingData} size={120} strokeWidth={15} />
                         <View style={styles.legendContainer}>
@@ -220,7 +396,7 @@ export default function DashboardScreen() {
                 </View>
                 <View style={styles.summaryCard}>
                     <Text style={styles.summaryLabel}>Monthly Payment</Text>
-                    <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>${totalMonthlyPayment.toLocaleString()}</Text>
+                    <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>${totalMonthlyPayment.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</Text>
                     <View style={styles.pieChartWrapper}>
                         <PieChart data={monthlyPaymentData} size={120} strokeWidth={15} />
                         <View style={styles.legendContainer}>
@@ -346,6 +522,11 @@ export default function DashboardScreen() {
                 </TouchableOpacity>
             </Link>
         </View>
+        
+        <OnboardingSlider 
+            visible={showOnboarding} 
+            onComplete={() => setShowOnboarding(false)} 
+        />
         </View>
     );
 }
@@ -393,6 +574,19 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     debugButtonText: {
+        fontSize: 18,
+    },
+    tutorialButton: {
+        backgroundColor: 'rgba(147, 51, 234, 0.1)',
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: 'rgba(147, 51, 234, 0.3)',
+    },
+    tutorialButtonText: {
         fontSize: 18,
     },
     // Page title style
@@ -633,5 +827,19 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginTop: theme.spacing.lg,
         fontWeight: theme.fontWeight.semibold,
+    },
+    exportButton: {
+        backgroundColor: 'rgba(96, 165, 250, 0.1)',
+        width: 40,
+        height: 40,
+        borderRadius: theme.borderRadius.lg,
+        justifyContent: "center",
+        alignItems: "center",
+        borderWidth: 2,
+        borderColor: 'rgba(96, 165, 250, 0.3)',
+        marginRight: theme.spacing.sm,
+    },
+    exportButtonText: {
+        fontSize: 20,
     },
 });

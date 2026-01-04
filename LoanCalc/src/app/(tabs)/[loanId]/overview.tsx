@@ -504,14 +504,18 @@ export default function LoanOverviewScreen() {
             `;
             
             const { uri } = await Print.printToFileAsync({ html });
-            await Sharing.shareAsync(uri, { 
+            const shareResult = await Sharing.shareAsync(uri, { 
                 mimeType: 'application/pdf',
                 dialogTitle: 'Share Loan Report'
             });
+            // User canceled sharing - this is normal, don't show error
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            Alert.alert("Error", "Failed to generate PDF: " + errorMessage);
-            console.error(error);
+            // Don't show alert if user just dismissed/canceled
+            if (!errorMessage.includes('cancel') && !errorMessage.includes('dismiss')) {
+                Alert.alert("Error", "Failed to generate PDF: " + errorMessage);
+            }
+            console.log('PDF generation/sharing:', error);
         }
     };
 

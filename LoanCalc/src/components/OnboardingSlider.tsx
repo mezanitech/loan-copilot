@@ -21,26 +21,32 @@ interface OnboardingSliderProps {
 const slides = [
   {
     id: 1,
-    title: '📊 Track Your Loans',
-    description: 'Manage all your loans in one place. See monthly payments, total interest, and remaining balance at a glance.',
+    title: '📊 Track All Your Loans',
+    description: 'Manage multiple loans in one place. See your total debt, monthly payments, and remaining balances with interactive pie charts.',
     icon: '🏦',
   },
   {
     id: 2,
-    title: '📈 Visualize Your Progress',
-    description: 'Beautiful charts show how your balance decreases over time. See where your money goes with principal vs interest breakdown.',
-    icon: '📉',
-  },
-  {
-    id: 3,
-    title: '💰 Extra Payments',
-    description: 'Add one-time or recurring extra payments. Watch how they impact your total interest and payoff timeline.',
+    title: '💰 Smart Payment Strategies',
+    description: 'Add extra payments using Avalanche (highest interest) or Snowball (smallest balance) methods to save thousands in interest.',
     icon: '💵',
   },
   {
+    id: 3,
+    title: '📈 Visualize Your Progress',
+    description: 'Beautiful charts show your balance shrinking over time. See exactly where your money goes with principal vs interest breakdown.',
+    icon: '📉',
+  },
+  {
     id: 4,
+    title: '📄 Export & Share',
+    description: 'Generate detailed PDF reports of your loans and payment schedules. Share with lenders or keep for your records.',
+    icon: '📱',
+  },
+  {
+    id: 5,
     title: '🎯 Get Started',
-    description: 'Create your first loan to see payment schedules, charts, and how extra payments can save you money.',
+    description: 'Create your first loan to see payment schedules, savings calculators, and how extra payments can help you become debt-free faster.',
     icon: '✨',
   },
 ];
