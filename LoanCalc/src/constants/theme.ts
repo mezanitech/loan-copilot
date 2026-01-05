@@ -1,11 +1,21 @@
-// Professional color palette and design tokens - Glassy theme
+// Professional color palette and design tokens - Glassy Purple-Blue theme
 export const theme = {
     colors: {
-        // Primary colors - light and airy for glass effect
-        primary: '#60A5FA',      // Soft blue
-        primaryDark: '#3B82F6',
-        primaryLight: '#93C5FD',
-        primaryGlass: 'rgba(96, 165, 250, 0.15)',  // Semi-transparent primary
+        // Primary colors - Purple to Blue gradient matching app icon
+        primary: '#8B7BC4',      // Medium purple (mid-point of gradient)
+        primaryDark: '#5E4FA2',  // Deep purple
+        primaryLight: '#B8A9DC', // Light purple
+        primaryGlass: 'rgba(139, 123, 196, 0.15)',  // Semi-transparent purple
+        
+        // Secondary blue (from icon gradient)
+        secondary: '#60A5FA',     // Soft blue
+        secondaryDark: '#3B82F6',
+        secondaryLight: '#93C5FD',
+        secondaryGlass: 'rgba(96, 165, 250, 0.15)',
+        
+        // Gradient colors (for backgrounds)
+        gradientStart: '#9575CD',  // Purple (icon top)
+        gradientEnd: '#5E92F3',    // Blue (icon bottom)
         
         // Success/Money colors
         success: '#10B981',
@@ -33,9 +43,15 @@ export const theme = {
         warning: '#F59E0B',
         info: '#3B82F6',
         
-        // Glass effect overlays
+        // Glass effect overlays with purple tint
         glassOverlay: 'rgba(255, 255, 255, 0.4)',
         glassBorder: 'rgba(255, 255, 255, 0.6)',
+        glassBorderPurple: 'rgba(149, 117, 205, 0.3)',  // Purple tinted border
+        glassBorderBlue: 'rgba(94, 146, 243, 0.3)',     // Blue tinted border
+        
+        // Bezel/rim effects
+        bezelLight: 'rgba(255, 255, 255, 0.8)',
+        bezelDark: 'rgba(139, 123, 196, 0.2)',
         
         // Text colors
         textPrimary: '#0F172A',
@@ -82,21 +98,21 @@ export const theme = {
     
     shadows: {
         sm: {
-            shadowColor: '#60A5FA',
+            shadowColor: '#8B7BC4',  // Purple shadow
             shadowOffset: { width: 0, height: 2 },
             shadowOpacity: 0.08,
             shadowRadius: 4,
             elevation: 2,
         },
         md: {
-            shadowColor: '#60A5FA',
+            shadowColor: '#8B7BC4',  // Purple shadow
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.12,
             shadowRadius: 8,
             elevation: 3,
         },
         lg: {
-            shadowColor: '#60A5FA',
+            shadowColor: '#8B7BC4',  // Purple shadow
             shadowOffset: { width: 0, height: 8 },
             shadowOpacity: 0.15,
             shadowRadius: 16,
@@ -108,6 +124,13 @@ export const theme = {
             shadowOpacity: 0.04,
             shadowRadius: 24,
             elevation: 2,
+        },
+        bezel: {
+            shadowColor: '#9575CD',  // Purple glow for bezel effect
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 0.2,
+            shadowRadius: 8,
+            elevation: 3,
         },
     },
 };

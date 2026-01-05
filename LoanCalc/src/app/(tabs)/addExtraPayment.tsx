@@ -84,6 +84,15 @@ export default function AddExtraPaymentScreen() {
         return selectedLoan ? new Date(selectedLoan.startDate) : new Date();
     };
 
+    // Get loan term in months from selected loan
+    const getSelectedLoanTermInMonths = (): number => {
+        if (!selectedLoanId) return 0;
+        const selectedLoan = loans.find(l => l.id === selectedLoanId);
+        if (!selectedLoan) return 0;
+        const termValue = selectedLoan.term;
+        return selectedLoan.termUnit === 'years' ? termValue * 12 : termValue;
+    };
+
     // Handle month selection
     const handleMonthChange = (event: any, selectedDateValue: Date | undefined) => {
         if (selectedDateValue) {
@@ -437,6 +446,7 @@ export default function AddExtraPaymentScreen() {
                                 AsyncStorage.setItem('loans', JSON.stringify(updatedLoans));
                             }}
                             loanStartDate={getSelectedLoanStartDate()}
+                            loanTermInMonths={getSelectedLoanTermInMonths()}
                         />
                     </View>
                 )}

@@ -16,6 +16,7 @@ type EarlyPaymentListProps = {
     payments: EarlyPayment[];
     onPaymentsChange: (payments: EarlyPayment[]) => void;
     loanStartDate: Date;
+    loanTermInMonths: number;
 };
 
 export type EarlyPaymentListRef = {
@@ -23,7 +24,7 @@ export type EarlyPaymentListRef = {
 };
 
 const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
-    ({ payments, onPaymentsChange, loanStartDate }, ref) => {
+    ({ payments, onPaymentsChange, loanStartDate, loanTermInMonths }, ref) => {
     const [activeMonthPicker, setActiveMonthPicker] = useState<string | null>(null);
     const [expandedPayments, setExpandedPayments] = useState<Set<string>>(new Set());
     
@@ -37,7 +38,7 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
             name: "",
             type: "one-time",
             amount: "",
-            month: "",
+            month: "1", // Default to first payment month
         };
         onPaymentsChange([...payments, newPayment]);
         // Collapse all existing payments and expand only the new one
@@ -74,7 +75,11 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
             const yearDiff = selectedDate.getFullYear() - loanStartDate.getFullYear();
             const monthDiff = selectedDate.getMonth() - loanStartDate.getMonth();
             const totalMonthDiff = (yearDiff * 12) + monthDiff + 1; // +1 because first payment is month 1
-            updatePayment(paymentId, "month", totalMonthDiff.toString());
+            
+            // Restrict to valid payment months (1 to loanTermInMonths)
+            if (totalMonthDiff >= 1 && totalMonthDiff <= loanTermInMonths) {
+                updatePayment(paymentId, "month", totalMonthDiff.toString());
+            }
         }
     };
 
@@ -100,6 +105,19 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
         const actualDate = new Date(loanStartDate);
         actualDate.setMonth(actualDate.getMonth() + paymentMonth - 1);
         return actualDate;
+    };
+
+    const getMinDate = (): Date => {
+        // First payment date (one month after loan start)
+        const minDate = new Date(loanStartDate);
+        return minDate;
+    };
+
+    const getMaxDate = (): Date => {
+        // Last payment date
+        const maxDate = new Date(loanStartDate);
+        maxDate.setMonth(maxDate.getMonth() + loanTermInMonths - 1);
+        return maxDate;
     };
 
     return (
@@ -212,6 +230,8 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
                                                 onChange={(event, date) => handleMonthChange(event, date, payment.id)}
                                                 textColor="#000000"
                                                 themeVariant="light"
+                                                minimumDate={getMinDate()}
+                                                maximumDate={getMaxDate()}
                                             />
                                             <TouchableOpacity 
                                                 style={styles.closeButton}
@@ -256,6 +276,8 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
                                                     onChange={(event, date) => handleMonthChange(event, date, payment.id)}
                                                     textColor="#000000"
                                                     themeVariant="light"
+                                                    minimumDate={getMinDate()}
+                                                    maximumDate={getMaxDate()}
                                                 />
                                                 <TouchableOpacity 
                                                     style={styles.closeButton}

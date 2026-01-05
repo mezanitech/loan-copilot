@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,11 @@ import {
   Dimensions,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Asset } from 'expo-asset';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -21,39 +25,88 @@ interface OnboardingSliderProps {
 const slides = [
   {
     id: 1,
-    title: '📊 Track All Your Loans',
+    title: 'Track All Your Loans',
     description: 'Manage multiple loans in one place. See your total debt, monthly payments, and remaining balances with interactive pie charts.',
-    icon: '🏦',
+    icon: 'stats-chart' as keyof typeof Ionicons.glyphMap,
+    image: require('../../assets/onboarding/slide1.webp'),
   },
   {
     id: 2,
-    title: '💰 Smart Payment Strategies',
+    title: 'Smart Payment Strategies',
     description: 'Add extra payments using Avalanche (highest interest) or Snowball (smallest balance) methods to save thousands in interest.',
-    icon: '💵',
+    icon: 'calculator' as keyof typeof Ionicons.glyphMap,
+    image: require('../../assets/onboarding/slide2.webp'),
   },
   {
     id: 3,
-    title: '📈 Visualize Your Progress',
+    title: 'Visualize Your Progress',
     description: 'Beautiful charts show your balance shrinking over time. See exactly where your money goes with principal vs interest breakdown.',
-    icon: '📉',
+    icon: 'trending-down' as keyof typeof Ionicons.glyphMap,
+    image: require('../../assets/onboarding/slide3.webp'),
   },
   {
     id: 4,
-    title: '📄 Export & Share',
-    description: 'Generate detailed PDF reports of your loans and payment schedules. Share with lenders or keep for your records.',
-    icon: '📱',
+    title: 'Export & Share',
+    description: 'Generate detailed PDF reports of your loans and payment schedules. Share or keep for your records.',
+    icon: 'document-text' as keyof typeof Ionicons.glyphMap,
+    image: require('../../assets/onboarding/slide4.webp'),
   },
   {
     id: 5,
-    title: '🎯 Get Started',
+    title: 'Get Started',
     description: 'Create your first loan to see payment schedules, savings calculators, and how extra payments can help you become debt-free faster.',
-    icon: '✨',
+    icon: 'rocket' as keyof typeof Ionicons.glyphMap,
+    image: [
+      require('../../assets/onboarding/slide5.webp'),
+      require('../../assets/onboarding/slide6.webp'),
+    ],
   },
 ];
 
 export default function OnboardingSlider({ visible, onComplete }: OnboardingSliderProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadingProgress, setLoadingProgress] = useState(0);
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // Preload all images when component mounts
+  useEffect(() => {
+    if (visible) {
+      preloadImages();
+    }
+  }, [visible]);
+
+  const preloadImages = async () => {
+    setIsLoading(true);
+    setLoadingProgress(0);
+    
+    const imagesToLoad = slides
+      .filter(slide => slide.image)
+      .flatMap(slide => Array.isArray(slide.image) ? slide.image : [slide.image]);
+    
+    if (imagesToLoad.length === 0) {
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const total = imagesToLoad.length;
+      let loaded = 0;
+
+      await Promise.all(
+        imagesToLoad.map(async (image) => {
+          await Asset.fromModule(image).downloadAsync();
+          loaded++;
+          setLoadingProgress((loaded / total) * 100);
+        })
+      );
+      
+      setIsLoading(false);
+    } catch (error) {
+      console.error('Error preloading images:', error);
+      setIsLoading(false);
+    }
+  };
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const contentOffsetX = event.nativeEvent.contentOffset.x;
@@ -84,6 +137,17 @@ export default function OnboardingSlider({ visible, onComplete }: OnboardingSlid
       onRequestClose={onComplete}
     >
       <View style={styles.container}>
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#007AFF" />
+            <Text style={styles.loadingText}>Loading...</Text>
+            <View style={styles.progressBar}>
+              <View style={[styles.progressFill, { width: `${loadingProgress}%` }]} />
+            </View>
+            <Text style={styles.progressText}>{Math.round(loadingProgress)}%</Text>
+          </View>
+        ) : (
+          <>
         {/* Header with Skip button */}
         <View style={styles.header}>
           <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
@@ -103,7 +167,25 @@ export default function OnboardingSlider({ visible, onComplete }: OnboardingSlid
         >
           {slides.map((slide) => (
             <View key={slide.id} style={styles.slide}>
-              <Text style={styles.icon}>{slide.icon}</Text>
+              {slide.image ? (
+                Array.isArray(slide.image) ? (
+                  <View style={styles.dualImageContainer}>
+                    {slide.image.map((img, index) => (
+                      <View key={index} style={styles.dualImageFrame}>
+                        <Image source={img} style={styles.dualSlideImage} resizeMode="contain" />
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.imageFrame}>
+                    <Image source={slide.image} style={styles.slideImage} resizeMode="contain" />
+                  </View>
+                )
+              ) : (
+                <View style={styles.iconContainer}>
+                  <Ionicons name={slide.icon} size={80} color="#007AFF" />
+                </View>
+              )}
               <Text style={styles.title}>{slide.title}</Text>
               <Text style={styles.description}>{slide.description}</Text>
             </View>
@@ -131,6 +213,8 @@ export default function OnboardingSlider({ visible, onComplete }: OnboardingSlid
             </Text>
           </TouchableOpacity>
         </View>
+        </>
+        )}
       </View>
     </Modal>
   );
@@ -166,9 +250,48 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 40,
   },
-  icon: {
-    fontSize: 80,
+  iconContainer: {
+    marginBottom: 40,
+  },
+  imageFrame: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 8,
     marginBottom: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  slideImage: {
+    width: SCREEN_WIDTH * 0.75,
+    height: SCREEN_WIDTH * 1.15,
+    borderRadius: 12,
+  },
+  dualImageContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 30,
+  },
+  dualImageFrame: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  dualSlideImage: {
+    width: SCREEN_WIDTH * 0.35,
+    height: SCREEN_WIDTH * 0.75,
+    borderRadius: 8,
   },
   title: {
     fontSize: 28,
@@ -215,6 +338,37 @@ const styles = StyleSheet.create({
   nextButtonText: {
     color: '#fff',
     fontSize: 18,
+    fontWeight: '600',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  loadingText: {
+    marginTop: 20,
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '600',
+  },
+  progressBar: {
+    width: '80%',
+    height: 4,
+    backgroundColor: '#E5E5EA',
+    borderRadius: 2,
+    marginTop: 30,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#007AFF',
+    borderRadius: 2,
+  },
+  progressText: {
+    marginTop: 10,
+    fontSize: 14,
+    color: '#007AFF',
     fontWeight: '600',
   },
 });

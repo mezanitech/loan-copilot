@@ -1,5 +1,6 @@
 import { Tabs, router } from "expo-router";
 import { TouchableOpacity, Text, Platform, View } from "react-native";
+import { Ionicons } from '@expo/vector-icons';
 import { theme } from "../../../constants/theme";
 
 export default function LoanTabLayout() {
@@ -74,8 +75,8 @@ export default function LoanTabLayout() {
                 options={{ 
                     title: "Loan Details",
                     tabBarLabel: "Loan Details",
-                    tabBarIcon: ({ color }) => (
-                        <TabIcon icon="📊" color={color} />
+                    tabBarIcon: ({ color, size }) => (
+                        <Ionicons name="document-text-outline" size={size || 24} color={color} />
                     ),
                 }} 
             />
@@ -84,8 +85,8 @@ export default function LoanTabLayout() {
                 options={{ 
                     title: "Extra Payments",
                     tabBarLabel: "Payments",
-                    tabBarIcon: ({ color }) => (
-                        <TabIcon icon="💰" color={color} />
+                    tabBarIcon: ({ color, size }) => (
+                        <Ionicons name="wallet-outline" size={size || 24} color={color} />
                     ),
                 }} 
             />
@@ -94,16 +95,11 @@ export default function LoanTabLayout() {
                 options={{ 
                     title: "Payment Schedule",
                     tabBarLabel: "Schedule",
-                    tabBarIcon: ({ color }) => (
-                        <TabIcon icon="📅" color={color} />
+                    tabBarIcon: ({ color, size }) => (
+                        <Ionicons name="calendar-outline" size={size || 24} color={color} />
                     ),
                 }} 
             />
         </Tabs>
     );
-}
-
-// Simple emoji icon component for tabs
-function TabIcon({ icon, color }: { icon: string; color: string }) {
-    return <Text style={{ fontSize: 24, color }}>{icon}</Text>;
 }

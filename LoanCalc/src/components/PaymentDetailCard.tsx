@@ -7,6 +7,8 @@ type PaymentDetailCardProps = {
     principal: number;
     interest: number;
     balance: number;
+    interestRate?: number;
+    rateChanged?: boolean;
 };
 
 export default function PaymentDetailCard({ 
@@ -15,7 +17,9 @@ export default function PaymentDetailCard({
     payment, 
     principal, 
     interest, 
-    balance 
+    balance,
+    interestRate,
+    rateChanged
 }: PaymentDetailCardProps) {
     return (
         <View style={styles.card}>
@@ -23,6 +27,13 @@ export default function PaymentDetailCard({
                 <Text style={styles.paymentNumber}>Payment #{paymentNumber}</Text>
                 <Text style={styles.date}>{date}</Text>
             </View>
+            {rateChanged && interestRate !== undefined && (
+                <View style={styles.rateChangeBadge}>
+                    <Text style={styles.rateChangeText}>
+                        ⚠️ Rate changed to {interestRate.toFixed(2)}%
+                    </Text>
+                </View>
+            )}
             <View style={styles.details}>
                 <View style={styles.row}>
                     <Text style={styles.label}>Payment</Text>
@@ -36,6 +47,12 @@ export default function PaymentDetailCard({
                     <Text style={styles.label}>Interest</Text>
                     <Text style={styles.value}>${interest.toFixed(2)}</Text>
                 </View>
+                {interestRate !== undefined && (
+                    <View style={styles.row}>
+                        <Text style={styles.label}>Current Rate</Text>
+                        <Text style={styles.value}>{interestRate.toFixed(2)}%</Text>
+                    </View>
+                )}
                 <View style={styles.row}>
                     <Text style={styles.label}>Remaining Balance</Text>
                     <Text style={[styles.value, styles.balance]}>${balance.toFixed(2)}</Text>
@@ -66,6 +83,20 @@ const styles = StyleSheet.create({
         paddingBottom: 12,
         borderBottomWidth: 1,
         borderBottomColor: "#e9ecef",
+    },
+    rateChangeBadge: {
+        backgroundColor: "#fff3cd",
+        borderRadius: 8,
+        padding: 10,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: "#ffc107",
+    },
+    rateChangeText: {
+        fontSize: 13,
+        fontWeight: "600",
+        color: "#856404",
+        textAlign: "center",
     },
     paymentNumber: {
         fontSize: 16,

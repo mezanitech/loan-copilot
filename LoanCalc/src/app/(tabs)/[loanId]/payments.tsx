@@ -13,6 +13,7 @@ export default function PaymentsScreen() {
     const [earlyPayments, setEarlyPayments] = useState<EarlyPayment[]>([]);
     const [startDate, setStartDate] = useState(new Date());
     const [loanAmount, setLoanAmount] = useState("");
+    const [loanTermInMonths, setLoanTermInMonths] = useState(0);
 
     // Load loan data when component mounts
     useEffect(() => {
@@ -34,6 +35,10 @@ export default function PaymentsScreen() {
                         setStartDate(new Date(loan.startDate));
                     }
                     setLoanAmount(loan.amount.toString());
+                    // Calculate term in months
+                    const termValue = parseFloat(loan.term);
+                    const termInMonths = loan.termUnit === 'years' ? termValue * 12 : termValue;
+                    setLoanTermInMonths(termInMonths);
                 }
             }
         } catch (error) {
@@ -41,23 +46,26 @@ export default function PaymentsScreen() {
         }
     };
 
-    // Save early payments to AsyncStorage
-    const savePayments = async () => {
+    // Save early payments to AsyncStorage automatically
+    const savePayments = async (payments: EarlyPayment[]) => {
         try {
             const loansData = await AsyncStorage.getItem('loans');
             const loans = loansData ? JSON.parse(loansData) : [];
             const loanIndex = loans.findIndex((l: any) => l.id === loanId);
             
             if (loanIndex !== -1) {
-                loans[loanIndex].earlyPayments = earlyPayments;
+                loans[loanIndex].earlyPayments = payments;
                 await AsyncStorage.setItem('loans', JSON.stringify(loans));
-                earlyPaymentListRef.current?.collapseAll();
-                Alert.alert("Success", "Early payments saved successfully");
             }
         } catch (error) {
-            Alert.alert("Error", "Failed to save early payments");
-            console.error(error);
+            console.error('Error saving payments:', error);
         }
+    };
+
+    // Handle payment changes and auto-save
+    const handlePaymentsChange = (payments: EarlyPayment[]) => {
+        setEarlyPayments(payments);
+        savePayments(payments);
     };
 
     return (
@@ -70,8 +78,9 @@ export default function PaymentsScreen() {
             <EarlyPaymentList
                 ref={earlyPaymentListRef}
                 payments={earlyPayments}
-                onPaymentsChange={setEarlyPayments}
+                onPaymentsChange={handlePaymentsChange}
                 loanStartDate={startDate}
+                loanTermInMonths={loanTermInMonths}
             />
 
             {/* Info box */}
@@ -81,11 +90,6 @@ export default function PaymentsScreen() {
                     Extra payments go directly toward your principal balance, reducing the total interest you'll pay over the life of the loan.
                 </Text>
             </View>
-
-            {/* Save button */}
-            <TouchableOpacity style={styles.saveButton} onPress={savePayments}>
-                <Text style={styles.saveButtonText}>💾 Save Extra Payments</Text>
-            </TouchableOpacity>
         </ScrollView>
     );
 }
@@ -131,20 +135,5 @@ const styles = StyleSheet.create({
         fontSize: theme.fontSize.sm,
         color: theme.colors.textSecondary,
         lineHeight: 20,
-    },
-    saveButton: {
-        backgroundColor: theme.colors.success,
-        padding: theme.spacing.lg,
-        borderRadius: theme.borderRadius.lg,
-        alignItems: "center",
-        marginBottom: theme.spacing.xxxl,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.3)',
-        ...theme.shadows.md,
-    },
-    saveButtonText: {
-        color: theme.colors.textInverse,
-        fontSize: theme.fontSize.lg,
-        fontWeight: theme.fontWeight.bold,
     },
 });

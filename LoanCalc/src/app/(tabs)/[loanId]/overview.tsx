@@ -558,10 +558,15 @@ export default function LoanOverviewScreen() {
     // Dismiss keyboard when tapping outside
     return <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <ScrollView style={styles.container}>
-            {/* Export button */}
-            <TouchableOpacity style={styles.exportButton} onPress={generateTestPDF}>
-                <Text style={styles.exportButtonText}>📄 Export Report</Text>
-            </TouchableOpacity>
+            {/* Action buttons at top */}
+            <View style={styles.topButtonContainer}>
+                <TouchableOpacity style={styles.exportButtonTop} onPress={generateTestPDF}>
+                    <Text style={styles.exportButtonTopText}>Export Report</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.saveButton} onPress={updateLoan}>
+                    <Text style={styles.saveButtonText}>Save Changes</Text>
+                </TouchableOpacity>
+            </View>
 
             {/* Loan name input */}
             <InputField
@@ -740,11 +745,6 @@ export default function LoanOverviewScreen() {
                     
                 </>
             )}
-
-            {/* Update Loan button */}
-            <TouchableOpacity style={styles.updateButton} onPress={updateLoan}>
-                <Text style={styles.updateButtonText}>💾 Save Changes</Text>
-            </TouchableOpacity>
         </ScrollView>
     </TouchableWithoutFeedback>;
 }
@@ -756,6 +756,44 @@ const styles = StyleSheet.create({
         flex: 1,
         padding: theme.spacing.xl,
         backgroundColor: theme.colors.surface,
+    },
+    // Top action buttons container
+    topButtonContainer: {
+        flexDirection: 'row',
+        gap: theme.spacing.md,
+        marginBottom: theme.spacing.xl,
+    },
+    // Export Report button (top)
+    exportButtonTop: {
+        flex: 1,
+        backgroundColor: theme.colors.surfaceGlass,
+        padding: theme.spacing.md,
+        borderRadius: theme.borderRadius.lg,
+        alignItems: "center",
+        borderWidth: 1,
+        borderColor: theme.colors.glassBorderBlue,
+        ...theme.shadows.glass,
+    },
+    exportButtonTopText: {
+        color: theme.colors.primary,
+        fontSize: theme.fontSize.base,
+        fontWeight: theme.fontWeight.semibold,
+    },
+    // "Save Changes" button (top)
+    saveButton: {
+        flex: 1,
+        backgroundColor: theme.colors.primary,
+        padding: theme.spacing.md,
+        borderRadius: theme.borderRadius.lg,
+        alignItems: "center",
+        borderWidth: 1,
+        borderColor: theme.colors.glassBorderPurple,
+        ...theme.shadows.glass,
+    },
+    saveButtonText: {
+        color: theme.colors.textInverse,
+        fontSize: theme.fontSize.base,
+        fontWeight: theme.fontWeight.semibold,
     },
     // Page title
     title: {
@@ -769,21 +807,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         marginBottom: theme.spacing.xxl,
-    },
-    // "Save Changes" button
-    updateButton: {
-        backgroundColor: theme.colors.success,
-        padding: theme.spacing.lg,
-        borderRadius: theme.borderRadius.lg,
-        alignItems: "center",
-        marginTop: theme.spacing.xxl,
-        marginBottom: theme.spacing.xxxl,
-        ...theme.shadows.md,
-    },
-    updateButtonText: {
-        color: theme.colors.textInverse,
-        fontSize: theme.fontSize.lg,
-        fontWeight: theme.fontWeight.bold,
     },
     // Test PDF button
     testPdfButton: {

@@ -1,7 +1,7 @@
 // Import necessary components and hooks from React Native and Expo Router
 import { Link, useFocusEffect } from "expo-router";
 import { useState, useCallback } from "react";
-import { Text, View, StyleSheet, ScrollView, TouchableOpacity, Alert } from "react-native";
+import { Text, View, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -28,6 +28,7 @@ export default function DashboardScreen() {
     const [loans, setLoans] = useState<Loan[]>([]);
     const [expandedLoans, setExpandedLoans] = useState<Set<string>>(new Set());
     const [showOnboarding, setShowOnboarding] = useState(false);
+    const [showSettings, setShowSettings] = useState(false);
 
     // Function to load loans from device storage
     const loadLoans = async () => {
@@ -326,39 +327,13 @@ export default function DashboardScreen() {
                 <Text style={styles.title}>My Loans</Text>
                 <Text style={styles.subtitle}>Manage your financial journey</Text>
             </View>
-            <View style={styles.headerButtons}>
-                {loans.length > 0 && (
-                    <TouchableOpacity 
-                        style={styles.exportButton}
-                        onPress={exportAllLoansPDF}
-                        activeOpacity={0.7}
-                    >
-                        <Text style={styles.exportButtonText}>📄</Text>
-                    </TouchableOpacity>
-                )}
-                <TouchableOpacity 
-                    style={styles.tutorialButton}
-                    onPress={() => setShowOnboarding(true)}
-                    activeOpacity={0.7}
-                >
-                    <Text style={styles.tutorialButtonText}>📚</Text>
-                </TouchableOpacity>
-                <Link href="/(tabs)/about" asChild>
-                    <TouchableOpacity 
-                        style={styles.aboutButton}
-                        activeOpacity={0.7}
-                    >
-                        <Text style={styles.aboutButtonText}>ℹ️</Text>
-                    </TouchableOpacity>
-                </Link>
-                <TouchableOpacity 
-                    style={styles.debugButton}
-                    onPress={clearAllData}
-                    activeOpacity={0.7}
-                >
-                    <Text style={styles.debugButtonText}>🗑️</Text>
-                </TouchableOpacity>
-            </View>
+            <TouchableOpacity 
+                style={styles.settingsButton}
+                onPress={() => setShowSettings(true)}
+                activeOpacity={0.7}
+            >
+                <Text style={styles.settingsButtonText}>⚙️</Text>
+            </TouchableOpacity>
         </View>
 
         {/* Summary cards if loans exist */}
@@ -527,6 +502,81 @@ export default function DashboardScreen() {
             visible={showOnboarding} 
             onComplete={() => setShowOnboarding(false)} 
         />
+
+        {/* Settings Menu Modal */}
+        <Modal
+            visible={showSettings}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => setShowSettings(false)}
+        >
+            <TouchableOpacity 
+                style={styles.modalOverlay}
+                activeOpacity={1}
+                onPress={() => setShowSettings(false)}
+            >
+                <View style={styles.settingsMenu}>
+                    <Text style={styles.settingsTitle}>Settings</Text>
+                    
+                    {loans.length > 0 && (
+                        <TouchableOpacity 
+                            style={styles.menuItem}
+                            onPress={() => {
+                                setShowSettings(false);
+                                exportAllLoansPDF();
+                            }}
+                        >
+                            <Text style={styles.menuIcon}>📄</Text>
+                            <View style={styles.menuTextContainer}>
+                                <Text style={styles.menuText}>Export Portfolio</Text>
+                                <Text style={styles.menuSubtext}>Download PDF report of all loans</Text>
+                            </View>
+                        </TouchableOpacity>
+                    )}
+                    
+                    <TouchableOpacity 
+                        style={styles.menuItem}
+                        onPress={() => {
+                            setShowSettings(false);
+                            setShowOnboarding(true);
+                        }}
+                    >
+                        <Text style={styles.menuIcon}>📚</Text>
+                        <View style={styles.menuTextContainer}>
+                            <Text style={styles.menuText}>View Tutorial</Text>
+                            <Text style={styles.menuSubtext}>Learn how to use the app</Text>
+                        </View>
+                    </TouchableOpacity>
+                    
+                    <Link href="/(tabs)/about" asChild>
+                        <TouchableOpacity 
+                            style={styles.menuItem}
+                            onPress={() => setShowSettings(false)}
+                        >
+                            <Text style={styles.menuIcon}>ℹ️</Text>
+                            <View style={styles.menuTextContainer}>
+                                <Text style={styles.menuText}>About</Text>
+                                <Text style={styles.menuSubtext}>App information and privacy</Text>
+                            </View>
+                        </TouchableOpacity>
+                    </Link>
+                    
+                    <TouchableOpacity 
+                        style={[styles.menuItem, styles.menuItemDanger]}
+                        onPress={() => {
+                            setShowSettings(false);
+                            clearAllData();
+                        }}
+                    >
+                        <Text style={styles.menuIcon}>🗑️</Text>
+                        <View style={styles.menuTextContainer}>
+                            <Text style={[styles.menuText, styles.menuTextDanger]}>Clear All Data</Text>
+                            <Text style={styles.menuSubtext}>Delete all loans permanently</Text>
+                        </View>
+                    </TouchableOpacity>
+                </View>
+            </TouchableOpacity>
+        </Modal>
         </View>
     );
 }
@@ -550,44 +600,19 @@ const styles = StyleSheet.create({
         alignItems: 'flex-start',
         marginBottom: theme.spacing.xxl,
     },
-    headerButtons: {
-        flexDirection: 'row',
-        gap: theme.spacing.sm,
-    },
-    aboutButton: {
-        backgroundColor: theme.colors.gray200,
+    settingsButton: {
+        backgroundColor: theme.colors.surfaceGlass,
         width: 40,
         height: 40,
         borderRadius: 20,
         justifyContent: 'center',
         alignItems: 'center',
+        borderWidth: 1,
+        borderColor: theme.colors.glassBorderPurple,
+        ...theme.shadows.glass,
     },
-    aboutButtonText: {
-        fontSize: 18,
-    },
-    debugButton: {
-        backgroundColor: theme.colors.gray200,
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    debugButtonText: {
-        fontSize: 18,
-    },
-    tutorialButton: {
-        backgroundColor: 'rgba(147, 51, 234, 0.1)',
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 2,
-        borderColor: 'rgba(147, 51, 234, 0.3)',
-    },
-    tutorialButtonText: {
-        fontSize: 18,
+    settingsButtonText: {
+        fontSize: 20,
     },
     // Page title style
     title: {
@@ -828,18 +853,61 @@ const styles = StyleSheet.create({
         marginTop: theme.spacing.lg,
         fontWeight: theme.fontWeight.semibold,
     },
-    exportButton: {
-        backgroundColor: 'rgba(96, 165, 250, 0.1)',
-        width: 40,
-        height: 40,
-        borderRadius: theme.borderRadius.lg,
-        justifyContent: "center",
-        alignItems: "center",
-        borderWidth: 2,
-        borderColor: 'rgba(96, 165, 250, 0.3)',
-        marginRight: theme.spacing.sm,
+    // Settings menu modal
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: theme.spacing.xl,
     },
-    exportButtonText: {
-        fontSize: 20,
+    settingsMenu: {
+        backgroundColor: theme.colors.surface,
+        borderRadius: theme.borderRadius.xl,
+        padding: theme.spacing.xl,
+        width: '100%',
+        maxWidth: 400,
+        ...theme.shadows.lg,
+    },
+    settingsTitle: {
+        fontSize: theme.fontSize.xl,
+        fontWeight: theme.fontWeight.bold,
+        color: theme.colors.textPrimary,
+        marginBottom: theme.spacing.lg,
+    },
+    menuItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: theme.spacing.lg,
+        backgroundColor: theme.colors.surfaceGlass,
+        borderRadius: theme.borderRadius.lg,
+        marginBottom: theme.spacing.md,
+        borderWidth: 1,
+        borderColor: theme.colors.glassBorder,
+        ...theme.shadows.glass,
+    },
+    menuItemDanger: {
+        borderColor: 'rgba(239, 68, 68, 0.3)',
+        backgroundColor: 'rgba(239, 68, 68, 0.05)',
+    },
+    menuIcon: {
+        fontSize: 24,
+        marginRight: theme.spacing.md,
+    },
+    menuTextContainer: {
+        flex: 1,
+    },
+    menuText: {
+        fontSize: theme.fontSize.base,
+        fontWeight: theme.fontWeight.semibold,
+        color: theme.colors.textPrimary,
+        marginBottom: 2,
+    },
+    menuTextDanger: {
+        color: theme.colors.error,
+    },
+    menuSubtext: {
+        fontSize: theme.fontSize.xs,
+        color: theme.colors.textSecondary,
     },
 });

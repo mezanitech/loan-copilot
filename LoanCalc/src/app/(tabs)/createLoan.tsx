@@ -164,6 +164,7 @@ export default function CreateLoanScreen() {
             await AsyncStorage.setItem('loans', JSON.stringify(loans));
             
             // Clear the form fields
+            setLoanName('');
             setLoanAmount('');
             setInterestRate('');
             setTerm('');

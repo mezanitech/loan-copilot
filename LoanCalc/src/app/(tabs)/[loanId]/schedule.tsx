@@ -39,6 +39,8 @@ export default function LoanScheduleScreen() {
             if (loanId) {
                 loadLoan(loanId);
             }
+            // Reset to collapsed view when returning to this tab
+            setShowAllPayments(false);
         }, [loanId])
     );
 
@@ -174,7 +176,7 @@ export default function LoanScheduleScreen() {
     // Generate full payment schedule
     const paymentSchedule = generatePaymentSchedule();
     // Show first 5 and last 5 payments when collapsed, all when expanded
-    const displayedPayments = showAllPayments
+    const displayedPayments = showAllPayments || paymentSchedule.length <= 10
         ? paymentSchedule
         : [...paymentSchedule.slice(0, 5), ...paymentSchedule.slice(-5)];
 
