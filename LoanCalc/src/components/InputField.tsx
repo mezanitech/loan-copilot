@@ -9,9 +9,11 @@ type InputFieldProps = {
     placeholder: string;
     keyboardType?: "default" | "numeric" | "decimal-pad";
     formatNumber?: boolean; // New prop to enable number formatting with commas
+    error?: boolean; // New prop to indicate validation error
+    errorMessage?: string; // New prop to show error message
 };
 
-export default function InputField({ label, value, onChangeText, placeholder, keyboardType = "default", formatNumber = false }: InputFieldProps) {
+export default function InputField({ label, value, onChangeText, placeholder, keyboardType = "default", formatNumber = false, error = false, errorMessage }: InputFieldProps) {
     const [isFocused, setIsFocused] = useState(false);
     
     // Format number with commas for display
@@ -30,6 +32,11 @@ export default function InputField({ label, value, onChangeText, placeholder, ke
             // Remove commas and pass only digits
             const numericValue = text.replace(/[^0-9]/g, '');
             onChangeText(numericValue);
+        } else if (keyboardType === "decimal-pad") {
+            // For decimal inputs, replace comma with period (for international keyboards)
+            // and allow only digits, one decimal separator
+            const normalized = text.replace(/,/g, '.');
+            onChangeText(normalized);
         } else {
             onChangeText(text);
         }
@@ -45,6 +52,7 @@ export default function InputField({ label, value, onChangeText, placeholder, ke
                 style={[
                     styles.input,
                     isFocused && styles.inputFocused,
+                    error && styles.inputError,
                 ]}
                 value={displayValue}
                 onChangeText={handleChange}
@@ -54,6 +62,9 @@ export default function InputField({ label, value, onChangeText, placeholder, ke
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
             />
+            {error && errorMessage && (
+                <Text style={styles.errorText}>{errorMessage}</Text>
+            )}
         </View>
     );
 }
@@ -80,5 +91,15 @@ const styles = StyleSheet.create({
     inputFocused: {
         borderColor: theme.colors.primary,
         ...theme.shadows.sm,
+    },
+    inputError: {
+        borderColor: '#EF4444',
+        borderWidth: 2,
+    },
+    errorText: {
+        color: '#EF4444',
+        fontSize: theme.fontSize.xs,
+        marginTop: theme.spacing.xs,
+        fontWeight: theme.fontWeight.medium,
     },
 });

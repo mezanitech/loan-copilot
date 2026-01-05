@@ -14,18 +14,10 @@ import { theme } from '../../../constants/theme';
 import InputField from "../../../components/InputField";
 import TermSelector from "../../../components/TermSelector";
 import PaymentSummary from "../../../components/PaymentSummary";
-import LineChart from "../../../components/LineChart";
 import DualLineChart from "../../../components/DualLineChart";
-
-// Type for early payment data
-type EarlyPayment = {
-    id: string;
-    type: string;
-    amount: string;
-    month: string;
-    frequency?: string;
-    name?: string;
-};
+import { EarlyPayment } from "../../../components/EarlyPaymentList";
+// Import calculation utilities
+import { calculatePayment, generatePaymentSchedule, calculateSavings, convertTermToMonths } from "../../../utils/loanCalculations";
 
 export default function LoanOverviewScreen() {
     // Get the loan ID from URL parameters (using useGlobalSearchParams for dynamic routes in tabs)
@@ -109,153 +101,6 @@ export default function LoanOverviewScreen() {
     };
 
     // Calculate monthly payment using standard loan amortization formula
-    const calculatePayment = () => {
-        // Convert string inputs to numbers
-        const principal = parseFloat(loanAmount);
-        const annualRate = parseFloat(interestRate);
-        const termValue = parseFloat(term);
-
-        // Return zeros if any input is missing
-        if (!principal || !annualRate || !termValue) {
-            return { monthlyPayment: 0, totalPayment: 0 };
-        }
-
-        // Convert term to months if it's in years
-        const termInMonths = termUnit === "years" ? termValue * 12 : termValue;
-        const monthlyRate = annualRate / 100 / 12; // Convert annual rate to monthly decimal
-
-        // Handle 0% interest rate (simple division)
-        if (monthlyRate === 0) {
-            const monthlyPayment = principal / termInMonths;
-            return {
-                monthlyPayment,
-                totalPayment: monthlyPayment * termInMonths,
-            };
-        }
-
-        // Standard amortization formula: M = P * [r(1+r)^n] / [(1+r)^n - 1]
-        const monthlyPayment = principal * (monthlyRate * Math.pow(1 + monthlyRate, termInMonths)) / (Math.pow(1 + monthlyRate, termInMonths) - 1);
-        const totalPayment = monthlyPayment * termInMonths;
-
-        return { monthlyPayment, totalPayment };
-    };
-
-    // Generate payment schedule INCLUDING early payments (shows actual payoff timeline)
-    const generatePaymentSchedule = () => {
-        // Convert string inputs to numbers
-        const principal = parseFloat(loanAmount);
-        const annualRate = parseFloat(interestRate);
-        const termValue = parseFloat(term);
-
-        // Return empty if missing any required field
-        if (!principal || !annualRate || !termValue) {
-            return [];
-        }
-
-        const termInMonths = termUnit === "years" ? termValue * 12 : termValue;
-        const monthlyRate = annualRate / 100 / 12;
-        const { monthlyPayment } = calculatePayment();
-
-        let balance = principal;
-        const schedule = [];
-        const start = new Date(date);
-
-        // Generate payment details for each month
-        for (let i = 0; i < termInMonths; i++) {
-            // Stop if loan is paid off early
-            if (balance <= 0) break;
-            
-            // Interest is calculated on remaining balance
-            const interestPayment = balance * monthlyRate;
-            let totalPayment = monthlyPayment;
-            
-            // Add all applicable early payments for this month
-            earlyPayments.forEach(payment => {
-                const amount = parseFloat(payment.amount) || 0;
-                const currentMonth = i + 1; // 1-indexed month number
-                
-                if (payment.type === "recurring") {
-                    const startMonth = parseInt(payment.month) || 1;
-                    const frequency = parseInt(payment.frequency || "1");
-                    
-                    // Check if this month qualifies for recurring payment
-                    // Payment applies if: current month >= start month AND (current month - start month) is divisible by frequency
-                    if (currentMonth >= startMonth && (currentMonth - startMonth) % frequency === 0) {
-                        totalPayment += amount;
-                    }
-                // One-time payments apply to specific month
-                } else if (payment.type === "one-time" && parseInt(payment.month) === currentMonth) {
-                    totalPayment += amount;
-                }
-            });
-            
-            // Calculate principal payment (can't exceed remaining balance)
-            const principalPayment = Math.min(totalPayment - interestPayment, balance);
-            balance -= principalPayment;
-
-            // Calculate payment date (add i months to start date)
-            const paymentDate = new Date(start);
-            paymentDate.setMonth(start.getMonth() + i);
-
-            // Push payment details into schedule array
-            schedule.push({
-                paymentNumber: i + 1,
-                date: paymentDate.toLocaleDateString(),
-                payment: interestPayment + principalPayment,
-                principal: principalPayment,
-                interest: interestPayment,
-                balance: Math.max(0, balance),
-            });
-        }
-
-        return schedule;
-    };
-
-    // Generate payment schedule WITHOUT early payments (for comparison)
-    const generateOriginalPaymentSchedule = () => {
-        // Convert string inputs to numbers
-        const principal = parseFloat(loanAmount);
-        const annualRate = parseFloat(interestRate);
-        const termValue = parseFloat(term);
-
-        // Return empty if missing any required field
-        if (!principal || !annualRate || !termValue) {
-            return [];
-        }
-
-        const termInMonths = termUnit === "years" ? termValue * 12 : termValue;
-        const monthlyRate = annualRate / 100 / 12;
-        const { monthlyPayment } = calculatePayment();
-
-        let balance = principal;
-        const schedule = [];
-        const start = new Date(date);
-
-        // Generate standard payment schedule (no early payments)
-        for (let i = 0; i < termInMonths; i++) {
-            // Interest is calculated on remaining balance
-            const interestPayment = balance * monthlyRate;
-            // Rest of payment goes toward principal
-            const principalPayment = monthlyPayment - interestPayment;
-            balance -= principalPayment;
-
-            // Calculate payment date (add i months to start date)
-            const paymentDate = new Date(start);
-            paymentDate.setMonth(start.getMonth() + i);
-
-            schedule.push({
-                paymentNumber: i + 1,
-                date: paymentDate.toLocaleDateString(),
-                payment: monthlyPayment,
-                principal: principalPayment,
-                interest: interestPayment,
-                balance: Math.max(0, balance),
-            });
-        }
-
-        return schedule;
-    };
-
     // Save updated loan data to AsyncStorage and navigate back to dashboard
     const updateLoan = async () => {
         // Validate all required fields are filled
@@ -264,9 +109,20 @@ export default function LoanOverviewScreen() {
             return;
         }
 
-        // Calculate payment amounts
-        const { monthlyPayment } = calculatePayment();
-        const schedule = generatePaymentSchedule();
+        // Calculate payment amounts using centralized utility
+        const principal = parseFloat(loanAmount);
+        const annualRate = parseFloat(interestRate);
+        const termValue = parseFloat(term);
+        const termInMonths = convertTermToMonths(termValue, termUnit);
+        
+        const { monthlyPayment } = calculatePayment({ principal, annualRate, termInMonths });
+        const schedule = generatePaymentSchedule({ 
+            principal, 
+            annualRate, 
+            termInMonths, 
+            startDate: date, 
+            earlyPayments 
+        });
         // Calculate actual total based on payment schedule (includes early payments)
         const actualTotal = schedule.length > 0 
             ? schedule.reduce((sum, payment) => sum + payment.payment, 0)
@@ -519,23 +375,37 @@ export default function LoanOverviewScreen() {
         }
     };
 
-    // Calculate payment amounts based on current inputs
-    const { monthlyPayment, totalPayment } = calculatePayment();
+    // Calculate payment amounts and schedules using centralized utilities
+    const principal = parseFloat(loanAmount);
+    const annualRate = parseFloat(interestRate);
+    const termValue = parseFloat(term);
+    const termInMonths = convertTermToMonths(termValue, termUnit);
+    
+    const { monthlyPayment, totalPayment } = calculatePayment({ principal, annualRate, termInMonths });
+    
     // Generate payment schedules (with and without early payments)
-    const paymentSchedule = generatePaymentSchedule();
-    const originalSchedule = generateOriginalPaymentSchedule();
+    const paymentSchedule = generatePaymentSchedule({ 
+        principal, 
+        annualRate, 
+        termInMonths, 
+        startDate: date, 
+        earlyPayments 
+    });
+    const originalSchedule = generatePaymentSchedule({ 
+        principal, 
+        annualRate, 
+        termInMonths, 
+        startDate: date 
+    });
     
-    // Calculate actual total payment from schedule (reflects early payments)
-    const actualTotalPayment = paymentSchedule.length > 0 
-        ? paymentSchedule.reduce((sum, payment) => sum + payment.payment, 0)
-        : totalPayment;
-    const totalInterest = actualTotalPayment - parseFloat(loanAmount || "0");
-    
-    // Calculate savings from early payments by comparing with original schedule
-    const originalTotalPayment = originalSchedule.reduce((sum, payment) => sum + payment.payment, 0);
-    const originalTotalInterest = originalTotalPayment - parseFloat(loanAmount || "0");
-    const interestSaved = earlyPayments.length > 0 ? originalTotalInterest - totalInterest : 0;
-    const periodDecrease = earlyPayments.length > 0 ? originalSchedule.length - paymentSchedule.length : 0;
+    // Calculate savings using centralized utility
+    const { actualTotalPayment, totalInterest, interestSaved, periodDecrease } = calculateSavings({
+        principal,
+        annualRate,
+        termInMonths,
+        startDate: date,
+        earlyPayments
+    });
 
     // Extract principal balance data for both original and early payment schedules
     const originalBalanceData = originalSchedule.map(p => p.balance);

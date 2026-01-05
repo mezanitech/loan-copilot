@@ -10,6 +10,8 @@ import { useGlobalSearchParams, useFocusEffect } from 'expo-router';
 import PaymentDetailCard from "../../../components/PaymentDetailCard";
 import { EarlyPayment } from "../../../components/EarlyPaymentList";
 import { theme } from '../../../constants/theme';
+// Import calculation utilities
+import { calculatePayment, generatePaymentSchedule, convertTermToMonths } from "../../../utils/loanCalculations";
 
 
 export default function LoanScheduleScreen() {
@@ -68,113 +70,24 @@ export default function LoanScheduleScreen() {
         }
     };
 
-    // Calculate monthly payment using standard loan amortization formula
-    const calculatePayment = () => {
-        // Convert string inputs to numbers
-        const principal = parseFloat(loanAmount);
-        const annualRate = parseFloat(interestRate);
-        const termValue = parseFloat(term);
-
-        // Return zeros if any input is missing
-        if (!principal || !annualRate || !termValue) {
-            return { monthlyPayment: 0, totalPayment: 0 };
-        }
-
-        // Convert term to months if it's in years
-        const termInMonths = termUnit === "years" ? termValue * 12 : termValue;
-        const monthlyRate = annualRate / 100 / 12; // Convert annual rate to monthly decimal
-
-        // Handle 0% interest rate (simple division)
-        if (monthlyRate === 0) {
-            const monthlyPayment = principal / termInMonths;
-            return {
-                monthlyPayment,
-                totalPayment: monthlyPayment * termInMonths,
-            };
-        }
-
-        // Standard amortization formula: M = P * [r(1+r)^n] / [(1+r)^n - 1]
-        const monthlyPayment = principal * (monthlyRate * Math.pow(1 + monthlyRate, termInMonths)) / (Math.pow(1 + monthlyRate, termInMonths) - 1);
-        const totalPayment = monthlyPayment * termInMonths;
-
-        return { monthlyPayment, totalPayment };
-    };
-
-    // Generate detailed payment schedule showing each month's breakdown
-    const generatePaymentSchedule = () => {
-        // Convert string inputs to numbers
-        const principal = parseFloat(loanAmount);
-        const annualRate = parseFloat(interestRate);
-        const termValue = parseFloat(term);
-
-        // Return empty if missing any required field
-        if (!principal || !annualRate || !termValue || !startDate) {
-            return [];
-        }
-
-        const termInMonths = termUnit === "years" ? termValue * 12 : termValue;
-        const monthlyRate = annualRate / 100 / 12;
-        const { monthlyPayment } = calculatePayment();
-
-        let balance = principal;
-        const schedule = [];
-        // Parse date from YYYY-MM-DD format
-        const [year, month, day] = startDate.split('-').map(Number);
-        
-        if (!year || !month || !day) return [];
-
-        // Generate payment details for each month
-        for (let i = 0; i < termInMonths; i++) {
-            // Stop if loan is paid off early
-            if (balance <= 0) break;
-            
-            // Interest is calculated on remaining balance
-            const interestPayment = balance * monthlyRate;
-            let totalPayment = monthlyPayment;
-            
-            // Add all applicable early payments for this month
-            earlyPayments.forEach(payment => {
-                const amount = parseFloat(payment.amount) || 0;
-                const currentMonth = i + 1; // 1-indexed month number
-                
-                if (payment.type === "recurring") {
-                    const startMonth = parseInt(payment.month) || 1;
-                    const frequency = parseInt(payment.frequency || "1");
-                    
-                    // Check if this month qualifies for recurring payment
-                    // Payment applies if: current month >= start month AND (current month - start month) is divisible by frequency
-                    if (currentMonth >= startMonth && (currentMonth - startMonth) % frequency === 0) {
-                        totalPayment += amount;
-                    }
-                // One-time payments apply to specific month
-                } else if (payment.type === "one-time" && parseInt(payment.month) === currentMonth) {
-                    totalPayment += amount;
-                }
-            });
-            
-            // Calculate principal payment (can't exceed remaining balance)
-            const principalPayment = Math.min(totalPayment - interestPayment, balance);
-            balance -= principalPayment;
-
-            // Calculate payment date (add i months to start date)
-            const paymentDate = new Date(year, month - 1 + i, day);
-
-            // Push payment details into schedule array
-            schedule.push({
-                paymentNumber: i + 1,
-                date: paymentDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
-                payment: interestPayment + principalPayment,
-                principal: principalPayment,
-                interest: interestPayment,
-                balance: Math.max(0, balance),
-            });
-        }
-
-        return schedule;
-    };
-
-    // Generate full payment schedule
-    const paymentSchedule = generatePaymentSchedule();
+    // Generate full payment schedule using centralized utility
+    const principal = parseFloat(loanAmount);
+    const annualRate = parseFloat(interestRate);
+    const termValue = parseFloat(term);
+    const termInMonths = convertTermToMonths(termValue, termUnit);
+    
+    // Parse start date from YYYY-MM-DD format
+    const [year, month, day] = startDate ? startDate.split('-').map(Number) : [0, 0, 0];
+    const startDateObj = year && month && day ? new Date(year, month - 1, day) : new Date();
+    
+    const paymentSchedule = generatePaymentSchedule({ 
+        principal, 
+        annualRate, 
+        termInMonths, 
+        startDate: startDateObj,
+        earlyPayments
+    });
+    
     // Show first 5 and last 5 payments when collapsed, all when expanded
     const displayedPayments = showAllPayments || paymentSchedule.length <= 10
         ? paymentSchedule

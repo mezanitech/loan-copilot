@@ -12,6 +12,8 @@ import PaymentSummary from "../../components/PaymentSummary";
 import LineChart from "../../components/LineChart";
 import DualLineChart from "../../components/DualLineChart";
 import PaymentDetailCard from "../../components/PaymentDetailCard";
+// Import calculation utilities
+import { calculatePayment, generatePaymentSchedule, convertTermToMonths } from "../../utils/loanCalculations";
 
 
 export default function CreateLoanScreen() {
@@ -20,10 +22,66 @@ export default function CreateLoanScreen() {
     const [loanAmount, setLoanAmount] = useState("");
     const [interestRate, setInterestRate] = useState("");
     const [term, setTerm] = useState("");
-    const [termUnit, setTermUnit] = useState<"months" | "years">("months"); // Can be months or years
+    const [termUnit, setTermUnit] = useState<"months" | "years">("years"); // Can be months or years
     const [date, setDate] = useState(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [showAllPayments, setShowAllPayments] = useState(false); // Toggle for expanding payment details
+
+    // Validation error states
+    const [loanNameError, setLoanNameError] = useState(false);
+    const [loanAmountError, setLoanAmountError] = useState(false);
+    const [interestRateError, setInterestRateError] = useState(false);
+    const [termError, setTermError] = useState(false);
+    const [attempted, setAttempted] = useState(false); // Track if user has tried to save
+
+    // Validation functions
+    const validateLoanName = (value: string) => {
+        if (attempted) {
+            setLoanNameError(!value || value.trim() === '');
+        }
+    };
+
+    const validateLoanAmount = (value: string) => {
+        if (attempted) {
+            const amount = parseFloat(value);
+            setLoanAmountError(!value || isNaN(amount) || amount <= 0);
+        }
+    };
+
+    const validateInterestRate = (value: string) => {
+        if (attempted) {
+            const rate = parseFloat(value);
+            setInterestRateError(!value || isNaN(rate) || rate < 0);
+        }
+    };
+
+    const validateTerm = (value: string) => {
+        if (attempted) {
+            const termValue = parseFloat(value);
+            setTermError(!value || isNaN(termValue) || termValue <= 0);
+        }
+    };
+
+    // Wrapped setters with validation
+    const handleLoanNameChange = (value: string) => {
+        setLoanName(value);
+        validateLoanName(value);
+    };
+
+    const handleLoanAmountChange = (value: string) => {
+        setLoanAmount(value);
+        validateLoanAmount(value);
+    };
+
+    const handleInterestRateChange = (value: string) => {
+        setInterestRate(value);
+        validateInterestRate(value);
+    };
+
+    const handleTermChange = (value: string) => {
+        setTerm(value);
+        validateTerm(value);
+    };
 
     // Handle date selection from date picker
     const onDateChange = (event: any, selectedDate?: Date) => {
@@ -42,91 +100,35 @@ export default function CreateLoanScreen() {
 
     // Format date for display (MM/DD/YYYY)
     const formatDateDisplay = (): string => {
+        // Ensure date is valid before formatting
+        if (!date || isNaN(date.getTime())) {
+            return new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+        }
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const day = String(date.getDate()).padStart(2, '0');
         const year = date.getFullYear();
         return `${month}/${day}/${year}`;
     };
 
-    // Calculate monthly payment using loan amortization formula
-    const calculatePayment = () => {
-        // Convert string inputs to numbers
-        const principal = parseFloat(loanAmount);
-        const annualRate = parseFloat(interestRate);
-        const termValue = parseFloat(term);
-
-        // Return zeros if any input is missing
-        if (!principal || !annualRate || !termValue) {
-            return { monthlyPayment: 0, totalPayment: 0 };
-        }
-
-        // Convert term to months if it's in years
-        const termInMonths = termUnit === "years" ? termValue * 12 : termValue;
-        const monthlyRate = annualRate / 100 / 12; // Convert annual rate to monthly decimal
-
-        // Handle 0% interest rate (simple division)
-        if (monthlyRate === 0) {
-            const monthlyPayment = principal / termInMonths;
-            return {
-                monthlyPayment,
-                totalPayment: monthlyPayment * termInMonths,
-            };
-        }
-
-        // Standard amortization formula: M = P * [r(1+r)^n] / [(1+r)^n - 1]
-        const monthlyPayment = principal * (monthlyRate * Math.pow(1 + monthlyRate, termInMonths)) / (Math.pow(1 + monthlyRate, termInMonths) - 1);
-        const totalPayment = monthlyPayment * termInMonths;
-
-        return { monthlyPayment, totalPayment };
-    };
-
-    // Generate detailed payment schedule showing how each payment is split between principal and interest
-    const generatePaymentSchedule = () => {
-        const principal = parseFloat(loanAmount);
-        const annualRate = parseFloat(interestRate);
-        const termValue = parseFloat(term);
-
-        // Return empty if missing any required field
-        if (!principal || !annualRate || !termValue) {
-            return [];
-        }
-
-        const termInMonths = termUnit === "years" ? termValue * 12 : termValue;
-        const monthlyRate = annualRate / 100 / 12;
-        const { monthlyPayment } = calculatePayment();
-
-        const schedule = [];
-        let remainingBalance = principal;
-        // Get year, month, day from date object
-        const year = date.getFullYear();
-        const month = date.getMonth() + 1;
-        const day = date.getDate();
-        
-        if (!year || !month || !day) return [];
-
-        // Generate payment details for each month
-        for (let i = 0; i < termInMonths; i++) {
-            // Interest is calculated on remaining balance
-            const interestPayment = remainingBalance * monthlyRate;
-            // Rest of payment goes toward principal
-            const principalPayment = monthlyPayment - interestPayment;
-            remainingBalance -= principalPayment;
-
-            // Calculate payment date (add i months to start date)
-            const paymentDate = new Date(year, month - 1 + i, day);
-            // Push payment details into schedule array
-            schedule.push({
-                paymentNumber: i + 1,
-                date: paymentDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
-                payment: monthlyPayment,
-                principal: principalPayment,
-                interest: interestPayment,
-                balance: Math.max(0, remainingBalance),
-            });
-        }
-
-        return schedule;
-    };
+    // Calculate payment amounts based on current inputs
+    const principal = parseFloat(loanAmount);
+    const annualRate = parseFloat(interestRate);
+    const termValue = parseFloat(term);
+    const termInMonths = convertTermToMonths(termValue, termUnit);
+    
+    const { monthlyPayment, totalPayment } = calculatePayment({ 
+        principal, 
+        annualRate, 
+        termInMonths 
+    });
+    
+    // Generate full payment schedule
+    const paymentSchedule = generatePaymentSchedule({ 
+        principal, 
+        annualRate, 
+        termInMonths, 
+        startDate: date 
+    });
 
     // Save the loan to device storage and navigate to dashboard
     const saveLoan = async () => {
@@ -134,9 +136,24 @@ export default function CreateLoanScreen() {
         const annualRate = parseFloat(interestRate);
         const termValue = parseFloat(term);
 
-        // Validate all required fields are filled
-        if (!loanName || !principal || !annualRate || !termValue) {
-            Alert.alert('Missing Information', 'Please fill in all fields before saving.');
+        // Mark that save was attempted
+        setAttempted(true);
+
+        // Validate all required fields
+        const nameInvalid = !loanName || loanName.trim() === '';
+        const amountInvalid = !loanAmount || isNaN(principal) || principal <= 0;
+        const rateInvalid = !interestRate || isNaN(annualRate) || annualRate < 0;
+        const termInvalid = !term || isNaN(termValue) || termValue <= 0;
+
+        // Set error states
+        setLoanNameError(nameInvalid);
+        setLoanAmountError(amountInvalid);
+        setInterestRateError(rateInvalid);
+        setTermError(termInvalid);
+
+        // If any field is invalid, show alert and return
+        if (nameInvalid || amountInvalid || rateInvalid || termInvalid) {
+            Alert.alert('Missing Information', 'Please fill in all fields with valid values before saving.');
             return;
         }
 
@@ -171,17 +188,19 @@ export default function CreateLoanScreen() {
             setDate(new Date());
             setShowAllPayments(false);
             
+            // Clear validation errors
+            setAttempted(false);
+            setLoanNameError(false);
+            setLoanAmountError(false);
+            setInterestRateError(false);
+            setTermError(false);
+            
             // Navigate back to dashboard
             router.push('/(tabs)');
         } catch (error) {
             Alert.alert('Error', 'Failed to save loan. Please try again.');
         }
     };
-
-    // Calculate payment amounts based on current inputs
-    const { monthlyPayment, totalPayment } = calculatePayment();
-    // Generate full payment schedule
-    const paymentSchedule = generatePaymentSchedule();
 
     // Dismiss keyboard when tapping outside
     return <View style={styles.wrapper}>
@@ -196,35 +215,43 @@ export default function CreateLoanScreen() {
         <InputField
             label="Loan Name"
             value={loanName}
-            onChangeText={setLoanName}
+            onChangeText={handleLoanNameChange}
             placeholder="e.g., Car Loan, Mortgage, Student Loan"
+            error={loanNameError}
+            errorMessage="Please enter a loan name"
         />
         
         {/* Loan amount input */}
         <InputField
             label="Loan Amount"
             value={loanAmount}
-            onChangeText={setLoanAmount}
+            onChangeText={handleLoanAmountChange}
             placeholder="Enter loan amount"
             keyboardType="numeric"
             formatNumber={true}
+            error={loanAmountError}
+            errorMessage="Please enter a valid amount greater than 0"
         />
 
         {/* Interest rate input */}
         <InputField
             label="Interest Rate (%)"
             value={interestRate}
-            onChangeText={setInterestRate}
+            onChangeText={handleInterestRateChange}
             placeholder="Enter interest rate"
             keyboardType="decimal-pad"
+            error={interestRateError}
+            errorMessage="Please enter a valid interest rate"
         />
 
         {/* Term input with months/years toggle */}
         <TermSelector
             term={term}
             termUnit={termUnit}
-            onTermChange={setTerm}
+            onTermChange={handleTermChange}
             onTermUnitChange={setTermUnit}
+            error={termError}
+            errorMessage="Please enter a valid loan term"
         />
 
         {/* Start date picker */}
@@ -357,13 +384,11 @@ export default function CreateLoanScreen() {
         </TouchableWithoutFeedback>
         
         {/* Fixed button at bottom */}
-        {monthlyPayment > 0 && (
-            <View style={styles.bottomButtonContainer}>
-                <TouchableOpacity style={styles.createButton} onPress={saveLoan}>
-                    <Text style={styles.createButtonText}>Create Loan</Text>
-                </TouchableOpacity>
-            </View>
-        )}
+        <View style={styles.bottomButtonContainer}>
+            <TouchableOpacity style={styles.createButton} onPress={saveLoan}>
+                <Text style={styles.createButtonText}>Create Loan</Text>
+            </TouchableOpacity>
+        </View>
     </View>;
 }
 

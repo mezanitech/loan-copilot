@@ -7,9 +7,11 @@ type TermSelectorProps = {
     termUnit: "months" | "years";
     onTermChange: (text: string) => void;
     onTermUnitChange: (unit: "months" | "years") => void;
+    error?: boolean; // New prop to indicate validation error
+    errorMessage?: string; // New prop to show error message
 };
 
-export default function TermSelector({ term, termUnit, onTermChange, onTermUnitChange }: TermSelectorProps) {
+export default function TermSelector({ term, termUnit, onTermChange, onTermUnitChange, error = false, errorMessage }: TermSelectorProps) {
     const [isFocused, setIsFocused] = useState(false);
     
     return (
@@ -21,6 +23,7 @@ export default function TermSelector({ term, termUnit, onTermChange, onTermUnitC
                         styles.input,
                         styles.termInput,
                         isFocused && styles.inputFocused,
+                        error && styles.inputError,
                     ]}
                     value={term}
                     onChangeText={onTermChange}
@@ -51,6 +54,9 @@ export default function TermSelector({ term, termUnit, onTermChange, onTermUnitC
                     </TouchableOpacity>
                 </View>
             </View>
+            {error && errorMessage && (
+                <Text style={styles.errorText}>{errorMessage}</Text>
+            )}
         </View>
     );
 }
@@ -107,5 +113,15 @@ const styles = StyleSheet.create({
     toggleTextActive: {
         color: theme.colors.textInverse,
         fontWeight: theme.fontWeight.semibold,
+    },
+    inputError: {
+        borderColor: '#EF4444',
+        borderWidth: 2,
+    },
+    errorText: {
+        color: '#EF4444',
+        fontSize: theme.fontSize.xs,
+        marginTop: theme.spacing.xs,
+        fontWeight: theme.fontWeight.medium,
     },
 });
