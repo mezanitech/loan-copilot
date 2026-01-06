@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import OnboardingSlider from "../components/OnboardingSlider";
 import FirstLaunchDisclaimer from "../components/FirstLaunchDisclaimer";
+import { setupNotificationHandler } from "../utils/notificationUtils";
 
 const ONBOARDING_KEY = "hasSeenOnboarding";
 const DISCLAIMER_ACCEPTED_KEY = "@disclaimer_accepted";
@@ -14,6 +15,7 @@ export default function RootLayout() {
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
+        setupNotificationHandler();
         checkOnboarding();
     }, []);
 

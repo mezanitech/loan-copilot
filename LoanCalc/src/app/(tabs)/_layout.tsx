@@ -14,7 +14,7 @@ export default function TabLayout() {
                     paddingTop: 8,
                     height: Platform.OS === 'ios' ? 85 : 60,
                     elevation: 8,
-                    shadowColor: '#000',
+                    shadowColor: theme.colors.textPrimary,
                     shadowOffset: { width: 0, height: -2 },
                     shadowOpacity: 0.1,
                     shadowRadius: 3,
@@ -130,6 +130,15 @@ export default function TabLayout() {
             <Tabs.Screen 
                 name="[loanId]" 
                 options={{ 
+                    href: null,
+                    headerShown: false,
+                    tabBarStyle: { display: 'none' }
+                }} 
+            />
+            <Tabs.Screen 
+                name="notificationSettings" 
+                options={{ 
+                    title: "Notifications",
                     href: null,
                     headerShown: false,
                     tabBarStyle: { display: 'none' }

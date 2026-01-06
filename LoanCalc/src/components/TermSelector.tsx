@@ -115,11 +115,11 @@ const styles = StyleSheet.create({
         fontWeight: theme.fontWeight.semibold,
     },
     inputError: {
-        borderColor: '#EF4444',
+        borderColor: theme.colors.error,
         borderWidth: 2,
     },
     errorText: {
-        color: '#EF4444',
+        color: theme.colors.error,
         fontSize: theme.fontSize.xs,
         marginTop: theme.spacing.xs,
         fontWeight: theme.fontWeight.medium,

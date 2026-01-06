@@ -1,4 +1,5 @@
 import { Text, View, StyleSheet } from "react-native";
+import { theme } from "../constants/theme";
 
 type PaymentDetailCardProps = {
     paymentNumber: number;
@@ -64,51 +65,47 @@ export default function PaymentDetailCard({
 
 const styles = StyleSheet.create({
     card: {
-        backgroundColor: "#fff",
-        borderRadius: 12,
-        padding: 16,
-        marginBottom: 12,
+        backgroundColor: theme.colors.surface,
+        borderRadius: theme.borderRadius.md,
+        padding: theme.spacing.lg,
+        marginBottom: theme.spacing.md,
         borderWidth: 1,
-        borderColor: "#e9ecef",
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2,
+        borderColor: theme.colors.gray200,
+        ...theme.shadows.sm,
     },
     header: {
         flexDirection: "row",
         justifyContent: "space-between",
-        marginBottom: 12,
-        paddingBottom: 12,
+        marginBottom: theme.spacing.md,
+        paddingBottom: theme.spacing.md,
         borderBottomWidth: 1,
-        borderBottomColor: "#e9ecef",
+        borderBottomColor: theme.colors.gray200,
     },
     rateChangeBadge: {
-        backgroundColor: "#fff3cd",
-        borderRadius: 8,
+        backgroundColor: '#fff3cd',
+        borderRadius: theme.borderRadius.sm,
         padding: 10,
-        marginBottom: 12,
+        marginBottom: theme.spacing.md,
         borderWidth: 1,
-        borderColor: "#ffc107",
+        borderColor: theme.colors.warning,
     },
     rateChangeText: {
-        fontSize: 13,
-        fontWeight: "600",
-        color: "#856404",
+        fontSize: theme.fontSize.xs,
+        fontWeight: theme.fontWeight.semibold,
+        color: '#856404',
         textAlign: "center",
     },
     paymentNumber: {
-        fontSize: 16,
-        fontWeight: "700",
-        color: "#333",
+        fontSize: theme.fontSize.base,
+        fontWeight: theme.fontWeight.bold,
+        color: theme.colors.textPrimary,
     },
     date: {
-        fontSize: 14,
-        color: "#666",
+        fontSize: theme.fontSize.sm,
+        color: theme.colors.textSecondary,
     },
     details: {
-        gap: 8,
+        gap: theme.spacing.sm,
     },
     row: {
         flexDirection: "row",
@@ -116,15 +113,15 @@ const styles = StyleSheet.create({
         paddingVertical: 4,
     },
     label: {
-        fontSize: 14,
-        color: "#666",
+        fontSize: theme.fontSize.sm,
+        color: theme.colors.textSecondary,
     },
     value: {
-        fontSize: 14,
-        fontWeight: "600",
-        color: "#333",
+        fontSize: theme.fontSize.sm,
+        fontWeight: theme.fontWeight.semibold,
+        color: theme.colors.textPrimary,
     },
     balance: {
-        color: "#007AFF",
+        color: theme.colors.primary,
     },
 });

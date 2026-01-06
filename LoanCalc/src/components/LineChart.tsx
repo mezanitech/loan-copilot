@@ -1,11 +1,12 @@
 // Import React Native UI components
 import { Text, View, StyleSheet } from "react-native";
+import { theme } from "../constants/theme";
 
 // Define the props that LineChart component accepts
 type LineChartProps = {
     title: string; // Chart title displayed at the top
     data: Array<{ value: number; label?: string }>; // Array of data points to plot
-    color?: string; // Color of the line and points (defaults to blue)
+    color?: string; // Color of the line and points (defaults to theme primary)
     yAxisFormatter?: (value: number) => string; // Function to format Y-axis labels
     showLegend?: boolean; // Whether to show the legend
     legendItems?: Array<{ color: string; label: string }>; // Legend items to display
@@ -14,7 +15,7 @@ type LineChartProps = {
 export default function LineChart({ 
     title, 
     data, 
-    color = "#007AFF", // Default blue color
+    color = theme.colors.primary, // Default to theme primary color
     yAxisFormatter = (v) => `$${v.toFixed(0)}`, // Default: format as dollar amount
     showLegend = false,
     legendItems = []
@@ -88,25 +89,25 @@ export default function LineChart({
 const styles = StyleSheet.create({
     // Outer container with gray background and border
     container: {
-        marginTop: 20,
-        padding: 20,
-        backgroundColor: "#f8f9fa",
-        borderRadius: 12,
+        marginTop: theme.spacing.xl,
+        padding: theme.spacing.xl,
+        backgroundColor: theme.colors.gray50,
+        borderRadius: theme.borderRadius.md,
         borderWidth: 1,
-        borderColor: "#e9ecef",
+        borderColor: theme.colors.gray200,
     },
     // Chart title text
     title: {
-        fontSize: 20,
-        fontWeight: "700",
+        fontSize: theme.fontSize.xl,
+        fontWeight: theme.fontWeight.bold,
         marginBottom: 15,
-        color: "#333",
+        color: theme.colors.textPrimary,
     },
     // Container for legend items (horizontal row)
     legendRow: {
         flexDirection: "row",
         justifyContent: "center",
-        gap: 20,
+        gap: theme.spacing.xl,
         marginBottom: 10,
     },
     // Individual legend item (dot + label)
@@ -123,9 +124,9 @@ const styles = StyleSheet.create({
     },
     // Legend label text
     legendText: {
-        fontSize: 12,
-        color: "#666",
-        fontWeight: "600",
+        fontSize: theme.fontSize.xs,
+        color: theme.colors.textSecondary,
+        fontWeight: theme.fontWeight.semibold,
     },
     // Wrapper for Y-axis labels and chart area
     chartWrapper: {
@@ -142,7 +143,7 @@ const styles = StyleSheet.create({
     // Individual Y-axis label text
     yAxisLabel: {
         fontSize: 11,
-        color: "#666",
+        color: theme.colors.textSecondary,
         textAlign: "right",
     },
     // Chart area where points and lines are drawn
@@ -151,7 +152,7 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         borderLeftWidth: 2,
         borderBottomWidth: 2,
-        borderColor: "#ddd",
+        borderColor: theme.colors.gray300,
         position: "relative",
     },
     // Container for each data point column
@@ -181,12 +182,12 @@ const styles = StyleSheet.create({
     xAxisLabels: {
         flexDirection: "row",
         justifyContent: "space-between",
-        marginTop: 8,
+        marginTop: theme.spacing.sm,
         paddingLeft: 80, // Align with chart (offset for Y-axis labels)
     },
     // Individual X-axis label text
     xAxisLabel: {
         fontSize: 11,
-        color: "#666",
+        color: theme.colors.textSecondary,
     },
 });

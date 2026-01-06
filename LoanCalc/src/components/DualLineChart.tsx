@@ -1,4 +1,5 @@
 import { Text, View, StyleSheet } from "react-native";
+import { theme } from "../constants/theme";
 
 type EarlyPayment = {
     id: string;
@@ -22,7 +23,7 @@ export default function DualLineChart({
     data, 
     earlyPayments = [],
     legendLabels = { principal: "Principal", interest: "Interest" },
-    colors = { principal: "#4CAF50", interest: "#FF6B6B" },
+    colors = { principal: theme.colors.success, interest: theme.colors.error },
     yAxisFormatter = (v) => `$${v.toFixed(0)}`
 }: DualLineChartProps) {
     // Calculate maxValue excluding months with early payments to avoid scale distortion
@@ -128,23 +129,23 @@ export default function DualLineChart({
 
 const styles = StyleSheet.create({
     container: {
-        marginTop: 20,
-        padding: 20,
-        backgroundColor: "#f8f9fa",
-        borderRadius: 12,
+        marginTop: theme.spacing.xl,
+        padding: theme.spacing.xl,
+        backgroundColor: theme.colors.gray50,
+        borderRadius: theme.borderRadius.md,
         borderWidth: 1,
-        borderColor: "#e9ecef",
+        borderColor: theme.colors.gray200,
     },
     title: {
-        fontSize: 20,
-        fontWeight: "700",
+        fontSize: theme.fontSize.xl,
+        fontWeight: theme.fontWeight.bold,
         marginBottom: 15,
-        color: "#333",
+        color: theme.colors.textPrimary,
     },
     legendRow: {
         flexDirection: "row",
         justifyContent: "center",
-        gap: 20,
+        gap: theme.spacing.xl,
         marginBottom: 10,
     },
     legendItem: {
@@ -158,9 +159,9 @@ const styles = StyleSheet.create({
         borderRadius: 5,
     },
     legendText: {
-        fontSize: 12,
-        color: "#666",
-        fontWeight: "600",
+        fontSize: theme.fontSize.xs,
+        color: theme.colors.textSecondary,
+        fontWeight: theme.fontWeight.semibold,
     },
     chartWrapper: {
         flexDirection: "row",
@@ -174,7 +175,7 @@ const styles = StyleSheet.create({
     },
     yAxisLabel: {
         fontSize: 11,
-        color: "#666",
+        color: theme.colors.textSecondary,
         textAlign: "right",
     },
     chart: {
@@ -182,7 +183,7 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         borderLeftWidth: 2,
         borderBottomWidth: 2,
-        borderColor: "#ddd",
+        borderColor: theme.colors.gray300,
         position: "relative",
     },
     chartPointContainer: {
@@ -206,12 +207,12 @@ const styles = StyleSheet.create({
     xAxisLabels: {
         flexDirection: "row",
         justifyContent: "space-between",
-        marginTop: 8,
+        marginTop: theme.spacing.sm,
         paddingLeft: 80,
     },
     xAxisLabel: {
         fontSize: 11,
-        color: "#666",
+        color: theme.colors.textSecondary,
     },
     earlyPaymentMarker: {
         position: "absolute",

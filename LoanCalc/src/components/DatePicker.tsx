@@ -1,6 +1,7 @@
 // Import React Native UI components
 import { Text, View, StyleSheet } from "react-native";
 import { Picker } from "@react-native-picker/picker";
+import { theme } from "../constants/theme";
 
 // Define props for the DatePicker component
 type DatePickerProps = {
@@ -126,19 +127,19 @@ export default function DatePicker({ label, value, onChangeDate }: DatePickerPro
 const styles = StyleSheet.create({
     // Outer container
     container: {
-        marginBottom: 16,
+        marginBottom: theme.spacing.lg,
     },
     // Label text above pickers
     label: {
-        fontSize: 16,
-        fontWeight: "600",
-        marginBottom: 8,
-        color: "#333",
+        fontSize: theme.fontSize.base,
+        fontWeight: theme.fontWeight.semibold,
+        marginBottom: theme.spacing.sm,
+        color: theme.colors.textPrimary,
     },
     // Row containing all three pickers
     pickerRow: {
         flexDirection: "row",
-        gap: 12,
+        gap: theme.spacing.md,
     },
     // Container for each individual picker
     pickerContainer: {
@@ -146,16 +147,16 @@ const styles = StyleSheet.create({
     },
     // Small label above each picker
     pickerLabel: {
-        fontSize: 12,
-        color: "#666",
+        fontSize: theme.fontSize.xs,
+        color: theme.colors.textSecondary,
         marginBottom: 4,
     },
     // Wrapper with border around picker
     pickerWrapper: {
         borderWidth: 1,
-        borderColor: "#ddd",
-        borderRadius: 8,
-        backgroundColor: "#fff",
+        borderColor: theme.colors.gray300,
+        borderRadius: theme.borderRadius.sm,
+        backgroundColor: theme.colors.surface,
     },
     // The actual picker component
     picker: {

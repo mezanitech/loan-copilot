@@ -50,7 +50,6 @@ export default function LoanTabLayout() {
                             paddingVertical: 6,
                             paddingHorizontal: 12,
                             borderRadius: 8,
-                            backgroundColor: theme.colors.primaryGlass,
                             flexDirection: 'row',
                             alignItems: 'center',
                             gap: 4,
@@ -65,7 +64,7 @@ export default function LoanTabLayout() {
                             color: theme.colors.textPrimary, 
                             fontSize: theme.fontSize.sm,
                             fontWeight: theme.fontWeight.semibold,
-                        }}>Dashboard</Text>
+                        }}>Home</Text>
                     </TouchableOpacity>
                 ),
             }}

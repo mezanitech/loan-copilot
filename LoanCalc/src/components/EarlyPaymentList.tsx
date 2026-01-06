@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Platform, Modal } from "react
 import { useState, forwardRef, useImperativeHandle } from "react";
 import DateTimePicker from '@react-native-community/datetimepicker';
 import InputField from "./InputField";
+import { theme } from "../constants/theme";
 
 export type EarlyPayment = {
     id: string;
@@ -10,6 +11,34 @@ export type EarlyPayment = {
     amount: string;
     month: string; // Payment month for one-time, starting month for recurring
     frequency?: string; // Only for recurring: every X months (1, 2, 3, etc.)
+};
+
+// Validation helper
+export const isValidEarlyPayment = (payment: EarlyPayment): boolean => {
+    // Amount must be a valid positive number
+    const amountNum = parseFloat(payment.amount);
+    if (!payment.amount || isNaN(amountNum) || amountNum <= 0) {
+        return false;
+    }
+    
+    // Month must be a valid positive number
+    const monthNum = parseInt(payment.month);
+    if (!payment.month || isNaN(monthNum) || monthNum < 1) {
+        return false;
+    }
+    
+    // For recurring payments, frequency is required and must be valid
+    if (payment.type === 'recurring') {
+        if (!payment.frequency) {
+            return false;
+        }
+        const freqNum = parseInt(payment.frequency);
+        if (isNaN(freqNum) || freqNum < 1) {
+            return false;
+        }
+    }
+    
+    return true;
 };
 
 type EarlyPaymentListProps = {
@@ -132,9 +161,13 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
             {payments.map((payment, index) => {
                 const isExpanded = expandedPayments.has(payment.id);
                 const isComplete = payment.name && payment.amount && payment.month;
+                const isValid = isValidEarlyPayment(payment);
                 
                 return (
-                <View key={payment.id} style={styles.paymentCard}>
+                <View key={payment.id} style={[
+                    styles.paymentCard,
+                    !isValid && styles.paymentCardInvalid
+                ]}>
                     <TouchableOpacity 
                         style={styles.cardHeader}
                         onPress={() => toggleExpand(payment.id)}
@@ -146,7 +179,7 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
                             </Text>
                             {!isExpanded && isComplete && (
                                 <Text style={styles.paymentSummary}>
-                                    ${payment.amount} • {payment.type === "one-time" ? getMonthDisplay(payment.month) : `Every ${payment.frequency || 1} month(s) from ${getMonthDisplay(payment.month)}`}
+                                    ${payment.amount} • {payment.type === "one-time" ? getMonthDisplay(payment.month) : `Every ${payment.frequency} month(s) from ${getMonthDisplay(payment.month)}`}
                                 </Text>
                             )}
                         </View>
@@ -166,6 +199,11 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
 
                     {isExpanded && (
                         <View style={styles.expandedContent}>
+                            {!isValid && (
+                                <View style={styles.validationWarning}>
+                                    <Text style={styles.validationWarningText}>⚠️ Please complete all required fields with valid values</Text>
+                                </View>
+                            )}
                             <InputField
                                 label="Payment Name"
                                 value={payment.name || ""}
@@ -228,7 +266,7 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
                                                 mode="date"
                                                 display="spinner"
                                                 onChange={(event, date) => handleMonthChange(event, date, payment.id)}
-                                                textColor="#000000"
+                                                textColor={theme.colors.textPrimary}
                                                 themeVariant="light"
                                                 minimumDate={getMinDate()}
                                                 maximumDate={getMaxDate()}
@@ -274,7 +312,7 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
                                                     mode="date"
                                                     display="spinner"
                                                     onChange={(event, date) => handleMonthChange(event, date, payment.id)}
-                                                    textColor="#000000"
+                                                    textColor={theme.colors.textPrimary}
                                                     themeVariant="light"
                                                     minimumDate={getMinDate()}
                                                     maximumDate={getMaxDate()}
@@ -291,10 +329,10 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
                                 )}
                             </View>
                             <InputField
-                                label="Frequency (every X months)"
+                                label="Frequency (Every X months)"
                                 value={payment.frequency || ""}
                                 onChangeText={(value) => updatePayment(payment.id, "frequency", value)}
-                                placeholder="e.g., 1 = monthly, 2 = every 2 months"
+                                placeholder="e.g., 1 (monthly), 2 (bi-monthly), 3 (quarterly)"
                                 keyboardType="numeric"
                             />
                         </>
@@ -321,28 +359,46 @@ const styles = StyleSheet.create({
         marginBottom: 12,
     },
     title: {
-        fontSize: 18,
-        fontWeight: "700",
-        color: "#333",
+        fontSize: theme.fontSize.lg,
+        fontWeight: theme.fontWeight.bold,
+        color: theme.colors.textPrimary,
     },
     addButton: {
-        backgroundColor: "#007AFF",
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 8,
+        backgroundColor: theme.colors.primary,
+        paddingHorizontal: theme.spacing.lg,
+        paddingVertical: theme.spacing.sm,
+        borderRadius: theme.borderRadius.sm,
     },
     addButtonText: {
-        color: "#fff",
-        fontSize: 14,
-        fontWeight: "600",
+        color: theme.colors.textInverse,
+        fontSize: theme.fontSize.sm,
+        fontWeight: theme.fontWeight.semibold,
     },
     paymentCard: {
-        backgroundColor: "#f8f9fa",
-        borderRadius: 12,
-        padding: 16,
-        marginBottom: 12,
+        backgroundColor: theme.colors.gray50,
+        borderRadius: theme.borderRadius.md,
+        padding: theme.spacing.lg,
+        marginBottom: theme.spacing.md,
         borderWidth: 1,
-        borderColor: "#e9ecef",
+        borderColor: theme.colors.gray200,
+    },
+    paymentCardInvalid: {
+        borderWidth: 2,
+        borderColor: theme.colors.error,
+        backgroundColor: '#fff5f5',
+    },
+    validationWarning: {
+        backgroundColor: '#fff3cd',
+        borderLeftWidth: 4,
+        borderLeftColor: theme.colors.warning,
+        padding: theme.spacing.md,
+        marginBottom: theme.spacing.md,
+        borderRadius: theme.borderRadius.sm,
+    },
+    validationWarningText: {
+        color: '#856404',
+        fontSize: theme.fontSize.xs,
+        fontWeight: theme.fontWeight.medium,
     },
     cardHeader: {
         flexDirection: "row",
@@ -356,82 +412,82 @@ const styles = StyleSheet.create({
     cardHeaderRight: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 12,
+        gap: theme.spacing.md,
     },
     paymentNumber: {
-        fontSize: 16,
-        fontWeight: "600",
-        color: "#333",
+        fontSize: theme.fontSize.base,
+        fontWeight: theme.fontWeight.semibold,
+        color: theme.colors.textPrimary,
         marginBottom: 4,
     },
     paymentSummary: {
-        fontSize: 13,
-        color: "#666",
+        fontSize: theme.fontSize.xs,
+        color: theme.colors.textSecondary,
         marginTop: 2,
     },
     expandIcon: {
-        fontSize: 12,
-        color: "#666",
+        fontSize: theme.fontSize.xs,
+        color: theme.colors.textSecondary,
     },
     expandedContent: {
-        marginTop: 12,
+        marginTop: theme.spacing.md,
     },
     removeButton: {
         width: 28,
         height: 28,
         borderRadius: 14,
-        backgroundColor: "#ffebee",
+        backgroundColor: '#ffebee',
         alignItems: "center",
         justifyContent: "center",
     },
     removeButtonText: {
-        color: "#FF3B30",
-        fontSize: 14,
-        fontWeight: "600",
+        color: theme.colors.error,
+        fontSize: theme.fontSize.sm,
+        fontWeight: theme.fontWeight.semibold,
     },
     typeToggle: {
         flexDirection: "row",
         borderWidth: 1,
-        borderColor: "#ddd",
-        borderRadius: 8,
+        borderColor: theme.colors.gray300,
+        borderRadius: theme.borderRadius.sm,
         overflow: "hidden",
-        marginBottom: 12,
+        marginBottom: theme.spacing.md,
     },
     toggleButton: {
         flex: 1,
         paddingVertical: 10,
-        paddingHorizontal: 16,
-        backgroundColor: "#fff",
+        paddingHorizontal: theme.spacing.lg,
+        backgroundColor: theme.colors.surface,
         alignItems: "center",
     },
     toggleButtonActive: {
-        backgroundColor: "#007AFF",
+        backgroundColor: theme.colors.primary,
     },
     toggleText: {
-        fontSize: 14,
-        color: "#333",
+        fontSize: theme.fontSize.sm,
+        color: theme.colors.textPrimary,
     },
     toggleTextActive: {
-        color: "#fff",
-        fontWeight: "600",
+        color: theme.colors.textInverse,
+        fontWeight: theme.fontWeight.semibold,
     },    inputLabel: {
-        fontSize: 16,
-        fontWeight: "600",
-        marginBottom: 8,
-        marginTop: 12,
-        color: "#333",
+        fontSize: theme.fontSize.base,
+        fontWeight: theme.fontWeight.semibold,
+        marginBottom: theme.spacing.sm,
+        marginTop: theme.spacing.md,
+        color: theme.colors.textPrimary,
     },
     monthPickerButton: {
-        backgroundColor: "#fff",
+        backgroundColor: theme.colors.surface,
         borderWidth: 1,
-        borderColor: "#e9ecef",
-        borderRadius: 8,
-        padding: 16,
-        marginBottom: 12,
+        borderColor: theme.colors.gray200,
+        borderRadius: theme.borderRadius.sm,
+        padding: theme.spacing.lg,
+        marginBottom: theme.spacing.md,
     },
     monthPickerText: {
-        fontSize: 16,
-        color: "#333",
+        fontSize: theme.fontSize.base,
+        color: theme.colors.textPrimary,
     },
     modalOverlay: {
         flex: 1,
@@ -440,23 +496,23 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
     },
     datePickerContainer: {
-        backgroundColor: '#fff',
-        borderRadius: 12,
-        padding: 20,
+        backgroundColor: theme.colors.surface,
+        borderRadius: theme.borderRadius.md,
+        padding: theme.spacing.xl,
         alignItems: 'center',
     },
     closeButton: {
-        backgroundColor: '#007AFF',
+        backgroundColor: theme.colors.primary,
         paddingHorizontal: 30,
-        paddingVertical: 12,
-        borderRadius: 8,
+        paddingVertical: theme.spacing.md,
+        borderRadius: theme.borderRadius.sm,
         marginTop: 15,
         minWidth: 120,
         alignItems: 'center',
     },
     closeButtonText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: '600',
+        color: theme.colors.textInverse,
+        fontSize: theme.fontSize.base,
+        fontWeight: theme.fontWeight.semibold,
     },
 });

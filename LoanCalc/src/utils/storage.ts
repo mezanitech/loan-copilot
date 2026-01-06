@@ -12,6 +12,7 @@ export type Loan = {
     totalPayment: number;
     createdAt: string;
     earlyPayments?: any[];
+    scheduledNotificationIds?: string[];
 };
 
 const LOANS_STORAGE_KEY = 'loans';
@@ -111,6 +112,37 @@ export async function clearAllLoans(): Promise<boolean> {
         return true;
     } catch (error) {
         console.error('Error clearing loans:', error);
+        return false;
+    }
+}
+
+/**
+ * Get notification preferences
+ */
+export async function getNotificationPreferences(): Promise<{ enabled: boolean; reminderDays: number }> {
+    try {
+        const enabled = await AsyncStorage.getItem('@notifications_enabled');
+        const reminderDays = await AsyncStorage.getItem('@notification_reminder_days');
+        return {
+            enabled: enabled === 'true',
+            reminderDays: reminderDays ? parseInt(reminderDays) : 3
+        };
+    } catch (error) {
+        console.error('Error loading notification preferences:', error);
+        return { enabled: false, reminderDays: 3 };
+    }
+}
+
+/**
+ * Save notification preferences
+ */
+export async function saveNotificationPreferences(enabled: boolean, reminderDays: number): Promise<boolean> {
+    try {
+        await AsyncStorage.setItem('@notifications_enabled', enabled.toString());
+        await AsyncStorage.setItem('@notification_reminder_days', reminderDays.toString());
+        return true;
+    } catch (error) {
+        console.error('Error saving notification preferences:', error);
         return false;
     }
 }

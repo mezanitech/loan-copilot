@@ -29,7 +29,10 @@
       },
       "package": "com.mezanitech.loancopilot",
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -38,7 +41,14 @@
       "expo-router",
       "expo-asset",
       "@react-native-community/datetimepicker",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#8B7BC4"
+        }
+      ]
     ],
     "extra": {
       "router": {},

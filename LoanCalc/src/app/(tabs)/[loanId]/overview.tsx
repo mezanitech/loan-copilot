@@ -7,7 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Import routing utilities from expo-router
 import { router, useGlobalSearchParams, useFocusEffect } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import * as Print from 'expo-print';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { theme } from '../../../constants/theme';
 // Import custom reusable components
@@ -15,9 +15,15 @@ import InputField from "../../../components/InputField";
 import TermSelector from "../../../components/TermSelector";
 import PaymentSummary from "../../../components/PaymentSummary";
 import DualLineChart from "../../../components/DualLineChart";
-import { EarlyPayment } from "../../../components/EarlyPaymentList";
+import { EarlyPayment, isValidEarlyPayment } from "../../../components/EarlyPaymentList";
 // Import calculation utilities
 import { calculatePayment, generatePaymentSchedule, calculateSavings, convertTermToMonths } from "../../../utils/loanCalculations";
+// Import notification utilities
+import { schedulePaymentReminders, cancelLoanNotifications } from "../../../utils/notificationUtils";
+import { getNotificationPreferences } from "../../../utils/storage";
+// Import PDF utilities
+import { generateRobustLoanPDF } from "../../../utils/pdfLibReportUtils";
+import { formatPeriod } from "../../../utils/reportUtils";
 
 export default function LoanOverviewScreen() {
     // Get the loan ID from URL parameters (using useGlobalSearchParams for dynamic routes in tabs)
@@ -36,6 +42,12 @@ export default function LoanOverviewScreen() {
 
     // Handle date selection from date picker
     const onDateChange = (event: any, selectedDate?: Date) => {
+        // On Android, always close the picker when user interacts
+        if (Platform.OS === 'android') {
+            setShowDatePicker(false);
+        }
+        
+        // Update date if a valid date was selected
         if (selectedDate) {
             setDate(selectedDate);
         }
@@ -100,6 +112,43 @@ export default function LoanOverviewScreen() {
         }
     };
 
+    // Calculate remaining principal using the standard amortization formula
+    const calculateRemainingPrincipal = (): number => {
+        const principal = parseFloat(loanAmount);
+        const annualRate = parseFloat(interestRate);
+        const termValue = parseFloat(term);
+        
+        if (isNaN(principal) || isNaN(annualRate) || isNaN(termValue)) {
+            return principal || 0;
+        }
+
+        const termInMonths = convertTermToMonths(termValue, termUnit);
+        const monthlyRate = annualRate / 100 / 12;
+        
+        // Handle zero interest rate edge case
+        if (monthlyRate === 0) {
+            const monthsElapsed = Math.max(0, Math.floor((new Date().getTime() - new Date(date).getTime()) / (1000 * 60 * 60 * 24 * 30.44)));
+            return Math.max(0, principal - (principal / termInMonths) * monthsElapsed);
+        }
+
+        // Calculate how many months have passed since the loan start date
+        const monthsElapsed = Math.max(0, Math.floor((new Date().getTime() - new Date(date).getTime()) / (1000 * 60 * 60 * 24 * 30.44)));
+        
+        // If loan term has elapsed, remaining balance is 0
+        if (monthsElapsed >= termInMonths) {
+            return 0;
+        }
+
+        // Standard amortization formula for remaining balance
+        // Remaining = P * [(1 + r)^n - (1 + r)^p] / [(1 + r)^n - 1]
+        // where P = principal, r = monthly rate, n = total periods, p = periods elapsed
+        const futureValue = Math.pow(1 + monthlyRate, termInMonths);
+        const paymentsMade = Math.pow(1 + monthlyRate, monthsElapsed);
+        
+        const remaining = principal * (futureValue - paymentsMade) / (futureValue - 1);
+        return Math.max(0, remaining);
+    };
+
     // Calculate monthly payment using standard loan amortization formula
     // Save updated loan data to AsyncStorage and navigate back to dashboard
     const updateLoan = async () => {
@@ -151,8 +200,35 @@ export default function LoanOverviewScreen() {
             const loanIndex = loans.findIndex((l: any) => l.id === loanId);
             
             if (loanIndex !== -1) {
+                // Cancel existing notifications
+                const existingLoan = loans[loanIndex];
+                if (existingLoan.scheduledNotificationIds && existingLoan.scheduledNotificationIds.length > 0) {
+                    await cancelLoanNotifications(existingLoan.scheduledNotificationIds);
+                }
+                
+                // Schedule new notifications if enabled
+                const notificationPrefs = await getNotificationPreferences();
+                let scheduledNotificationIds: string[] = [];
+                
+                if (notificationPrefs.enabled) {
+                    scheduledNotificationIds = await schedulePaymentReminders(
+                        loanId,
+                        loanName,
+                        monthlyPayment,
+                        getStartDate(),
+                        termInMonths,
+                        notificationPrefs.reminderDays
+                    );
+                }
+                
+                // Add notification IDs to updated loan
+                const loanWithNotifications = {
+                    ...updatedLoan,
+                    scheduledNotificationIds
+                };
+                
                 // Replace old loan with updated loan
-                loans[loanIndex] = updatedLoan;
+                loans[loanIndex] = loanWithNotifications;
                 // Save back to storage
                 await AsyncStorage.setItem('loans', JSON.stringify(loans));
                 Alert.alert("Success", "Loan updated successfully");
@@ -165,214 +241,74 @@ export default function LoanOverviewScreen() {
         }
     };
 
-    // Test PDF generation function
+    // Robust PDF generation function using pdf-lib
     const generateTestPDF = async () => {
-        try {
-            const html = `
-                <html>
-                    <head>
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                        <style>
-                            body { 
-                                font-family: Arial, sans-serif; 
-                                padding: 30px;
-                                color: #333;
-                            }
-                            h1 { 
-                                color: #60A5FA; 
-                                border-bottom: 3px solid #60A5FA;
-                                padding-bottom: 10px;
-                                margin-bottom: 20px;
-                            }
-                            h2 {
-                                color: #3B82F6;
-                                margin-top: 25px;
-                                margin-bottom: 15px;
-                            }
-                            .info-row {
-                                display: flex;
-                                justify-content: space-between;
-                                padding: 10px 0;
-                                border-bottom: 1px solid #E5E7EB;
-                            }
-                            .label {
-                                font-weight: bold;
-                                color: #6B7280;
-                            }
-                            .value {
-                                color: #111827;
-                                font-weight: 600;
-                            }
-                            .highlight {
-                                background-color: #EFF6FF;
-                                padding: 15px;
-                                border-radius: 8px;
-                                margin: 15px 0;
-                            }
-                            .savings {
-                                background-color: #D1FAE5;
-                                padding: 15px;
-                                border-radius: 8px;
-                                margin: 15px 0;
-                                border-left: 4px solid #10B981;
-                            }
-                            table {
-                                width: 100%;
-                                border-collapse: collapse;
-                                margin-top: 15px;
-                            }
-                            th {
-                                background-color: #60A5FA;
-                                color: white;
-                                padding: 10px;
-                                text-align: left;
-                            }
-                            td {
-                                padding: 8px;
-                                border-bottom: 1px solid #E5E7EB;
-                            }
-                            .footer {
-                                margin-top: 30px;
-                                padding-top: 20px;
-                                border-top: 2px solid #E5E7EB;
-                                color: #6B7280;
-                                font-size: 12px;
-                                text-align: center;
-                            }
-                        </style>
-                    </head>
-                    <body>
-                        <h1>💼 ${loanName || 'Loan'} - Detailed Report</h1>
-                        
-                        <h2>📊 Loan Details</h2>
-                        <div class="info-row">
-                            <span class="label">Loan Amount:</span>
-                            <span class="value">$${parseFloat(loanAmount || '0').toLocaleString()}</span>
-                        </div>
-                        <div class="info-row">
-                            <span class="label">Interest Rate:</span>
-                            <span class="value">${interestRate}%</span>
-                        </div>
-                        <div class="info-row">
-                            <span class="label">Loan Term:</span>
-                            <span class="value">${term} ${termUnit}</span>
-                        </div>
-                        <div class="info-row">
-                            <span class="label">Start Date:</span>
-                            <span class="value">${date.toLocaleDateString()}</span>
-                        </div>
-                        
-                        <h2>💰 Payment Summary</h2>
-                        <div class="highlight">
-                            <div class="info-row">
-                                <span class="label">Monthly Payment:</span>
-                                <span class="value">$${monthlyPayment.toFixed(2)}</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="label">Total Payment:</span>
-                                <span class="value">$${actualTotalPayment.toFixed(2)}</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="label">Total Interest:</span>
-                                <span class="value">$${totalInterest.toFixed(2)}</span>
-                            </div>
-                        </div>
-                        
-                        ${earlyPayments.length > 0 ? `
-                            <h2>🎉 Savings from Extra Payments</h2>
-                            <div class="savings">
-                                <div class="info-row">
-                                    <span class="label">💰 Interest Saved:</span>
-                                    <span class="value">$${interestSaved.toFixed(2)}</span>
-                                </div>
-                                <div class="info-row">
-                                    <span class="label">⚡ Time Saved:</span>
-                                    <span class="value">${periodDecrease >= 12 
-                                        ? `${Math.floor(periodDecrease / 12)} year${Math.floor(periodDecrease / 12) !== 1 ? 's' : ''}${periodDecrease % 12 > 0 ? ` ${periodDecrease % 12} month${periodDecrease % 12 !== 1 ? 's' : ''}` : ''}`
-                                        : `${periodDecrease} month${periodDecrease !== 1 ? 's' : ''}`
-                                    }</span>
-                                </div>
-                                <div class="info-row">
-                                    <span class="label">🎊 New Payoff Date:</span>
-                                    <span class="value">${(() => {
-                                        const finalDate = new Date(date);
-                                        finalDate.setMonth(finalDate.getMonth() + paymentSchedule.length - 1);
-                                        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-                                        return `${monthNames[finalDate.getMonth()]} ${finalDate.getFullYear()}`;
-                                    })()}</span>
-                                </div>
-                            </div>
-                            
-                            <h2>💸 Extra Payments</h2>
-                            <table>
-                                <tr>
-                                    <th>Payment Name</th>
-                                    <th>Amount</th>
-                                    <th>Month</th>
-                                    <th>Type</th>
-                                </tr>
-                                ${earlyPayments.map(payment => `
-                                    <tr>
-                                        <td>${payment.name || 'Extra Payment'}</td>
-                                        <td>$${parseFloat(payment.amount).toLocaleString()}</td>
-                                        <td>Payment #${payment.month}</td>
-                                        <td>${payment.type === 'one-time' ? 'One-time' : `Recurring (every ${payment.frequency} months)`}</td>
-                                    </tr>
-                                `).join('')}
-                            </table>
-                        ` : ''}
-                        
-                        <h2>📅 Payment Schedule</h2>
-                        <table>
-                            <tr>
-                                <th>#</th>
-                                <th>Date</th>
-                                <th>Payment</th>
-                                <th>Principal</th>
-                                <th>Interest</th>
-                                <th>Balance</th>
-                            </tr>
-                            ${paymentSchedule.map((payment, index) => {
-                                const paymentDate = new Date(date);
-                                paymentDate.setMonth(paymentDate.getMonth() + index);
-                                const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-                                const dateStr = `${monthNames[paymentDate.getMonth()]} ${paymentDate.getFullYear()}`;
-                                
-                                return `
-                                    <tr style="${index % 2 === 0 ? 'background-color: #F9FAFB;' : ''}">
-                                        <td>${index + 1}</td>
-                                        <td>${dateStr}</td>
-                                        <td>$${payment.payment.toFixed(2)}</td>
-                                        <td>$${payment.principal.toFixed(2)}</td>
-                                        <td>$${payment.interest.toFixed(2)}</td>
-                                        <td>$${payment.balance.toFixed(2)}</td>
-                                    </tr>
-                                `;
-                            }).join('')}
-                        </table>
-                        
-                        <div class="footer">
-                            <p>Generated by Loan Copilot on ${new Date().toLocaleDateString()}</p>
-                            <p>⚠️ This is for informational purposes only. Please verify all calculations with your lender.</p>
-                        </div>
-                    </body>
-                </html>
-            `;
-            
-            const { uri } = await Print.printToFileAsync({ html });
-            const shareResult = await Sharing.shareAsync(uri, { 
-                mimeType: 'application/pdf',
-                dialogTitle: 'Share Loan Report'
-            });
-            // User canceled sharing - this is normal, don't show error
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            // Don't show alert if user just dismissed/canceled
-            if (!errorMessage.includes('cancel') && !errorMessage.includes('dismiss')) {
-                Alert.alert("Error", "Failed to generate PDF: " + errorMessage);
+        setTimeout(async () => {
+            try {
+                // Filter out invalid early payments before generating PDF
+                const validEarlyPayments = earlyPayments.filter(isValidEarlyPayment);
+                
+                // Prepare loan data for pdf-lib
+                const loanData = {
+                    loanId: loanId || 'unknown',
+                    name: loanName || 'Loan',
+                    amount: parseFloat(loanAmount || '0'),
+                    interestRate: parseFloat(interestRate || '0'),
+                    termInMonths,
+                    monthlyPayment,
+                    totalPayment: actualTotalPayment,
+                    interestSaved,
+                    periodDecrease,
+                    earlyPayments: validEarlyPayments.map(ep => ({
+                        name: ep.name,
+                        type: ep.type,
+                        amount: parseFloat(ep.amount),
+                        month: ep.month,
+                        frequency: ep.frequency
+                    })),
+                    payments: paymentSchedule.map((payment, index) => {
+                        const paymentDate = new Date(date);
+                        paymentDate.setMonth(paymentDate.getMonth() + index);
+                        return {
+                            number: index + 1,
+                            principal: payment.principal,
+                            interest: payment.interest,
+                            balance: payment.balance,
+                            date: paymentDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+                        };
+                    })
+                };
+                
+                // Generate PDF using robust pdf-lib
+                const pdfBytes = await generateRobustLoanPDF(loanData, date);
+                
+                // Save to device
+                const filename = `${loanData.name.replace(/[^a-zA-Z0-9]/g, '_')}_report.pdf`;
+                const uri = FileSystem.documentDirectory + filename;
+                
+                // Convert Uint8Array to base64 string
+                const base64String = btoa(String.fromCharCode(...pdfBytes));
+                
+                await FileSystem.writeAsStringAsync(uri, base64String, {
+                    encoding: 'base64',
+                });
+                
+                // Share - completely isolated with try-catch
+                try {
+                    await Sharing.shareAsync(uri, { 
+                        mimeType: 'application/pdf',
+                        dialogTitle: 'Share Loan Report'
+                    });
+                } catch {
+                    // Silently ignore all share errors including dismissals
+                }
+            } catch (error) {
+                // Only show alert for actual PDF generation errors
+                if (error instanceof Error && !error.message.includes('cancel')) {
+                    Alert.alert("Error", "Failed to generate PDF");
+                }
             }
-            console.log('PDF generation/sharing:', error);
-        }
+        }, 0);
     };
 
     // Calculate payment amounts and schedules using centralized utilities
@@ -503,7 +439,7 @@ export default function LoanOverviewScreen() {
                                 mode="date"
                                 display="spinner"
                                 onChange={onDateChange}
-                                textColor="#000000"
+                                textColor={theme.colors.textPrimary}
                                 themeVariant="light"
                             />
                             <TouchableOpacity 
@@ -523,6 +459,7 @@ export default function LoanOverviewScreen() {
                     monthlyPayment={monthlyPayment}
                     totalPayment={actualTotalPayment}
                     loanAmount={loanAmount}
+                    remainingBalance={calculateRemainingPrincipal()}
                 />
             )}
 
@@ -601,7 +538,7 @@ export default function LoanOverviewScreen() {
                         data={balanceComparisonData}
                         earlyPayments={[]} // Don't hide any points for balance comparison
                         legendLabels={{ principal: "Original", interest: "With Extra Payments" }}
-                        colors={{ principal: "#FF9800", interest: "#007AFF" }}
+                        colors={{ principal: theme.colors.warning, interest: theme.colors.primary }}
                         yAxisFormatter={(value: number) => `$${(value / 1000).toFixed(0)}k`}
                     />
 

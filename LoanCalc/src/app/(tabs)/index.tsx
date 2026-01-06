@@ -1,13 +1,15 @@
 // Import necessary components and hooks from React Native and Expo Router
-import { Link, useFocusEffect } from "expo-router";
+import { Link, useFocusEffect, useRouter } from "expo-router";
 import { useState, useCallback } from "react";
-import { Text, View, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal } from "react-native";
+import { Text, View, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, Image } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Print from 'expo-print';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { theme } from '../../constants/theme';
 import PieChart from '../../components/PieChart';
 import OnboardingSlider from '../../components/OnboardingSlider';
+import { cancelLoanNotifications } from '../../utils/notificationUtils';
+import { generateRobustLoanPDF } from '../../utils/pdfLibReportUtils';
 
 // Define the structure of a Loan object
 type Loan = {
@@ -21,6 +23,7 @@ type Loan = {
     monthlyPayment: number;
     totalPayment: number;
     createdAt: string;
+    scheduledNotificationIds?: string[];
 };
 
 export default function DashboardScreen() {
@@ -29,6 +32,7 @@ export default function DashboardScreen() {
     const [expandedLoans, setExpandedLoans] = useState<Set<string>>(new Set());
     const [showOnboarding, setShowOnboarding] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
+    const router = useRouter();
 
     // Function to load loans from device storage
     const loadLoans = async () => {
@@ -52,6 +56,14 @@ export default function DashboardScreen() {
     // Function to delete a loan by its ID
     const deleteLoan = async (id: string) => {
         try {
+            // Find the loan to get its notification IDs
+            const loan = loans.find(l => l.id === id);
+            
+            // Cancel notifications if they exist
+            if (loan?.scheduledNotificationIds && loan.scheduledNotificationIds.length > 0) {
+                await cancelLoanNotifications(loan.scheduledNotificationIds);
+            }
+            
             const updatedLoans = loans.filter(loan => loan.id !== id);
             await AsyncStorage.setItem('loans', JSON.stringify(updatedLoans));
             setLoans(updatedLoans);
@@ -85,144 +97,65 @@ export default function DashboardScreen() {
             "This will export a summary of all your loans.\n\n💡 Tip: You can also export detailed reports for individual loans from their overview page.",
             [
                 { text: "Cancel", style: "cancel" },
-                { 
+                {
                     text: "Export All", 
-                    onPress: async () => {
-                        try {
-                            const html = `
-                <html>
-                    <head>
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                        <style>
-                            body { 
-                                font-family: Arial, sans-serif; 
-                                padding: 30px;
-                                color: #333;
+                    onPress: () => {
+                        // Wrap in setTimeout to isolate from UI thread
+                        setTimeout(async () => {
+                            try {
+                                // For portfolio summary, create comprehensive loan data
+                                const portfolioData = {
+                                    loanId: 'portfolio-summary',
+                                    name: `Portfolio of ${loans.length} Loan${loans.length === 1 ? '' : 's'}`,
+                                    amount: totalBorrowed,
+                                    interestRate: 0, // Will be handled specially in header
+                                    termInMonths: 0, // Will be handled specially in header
+                                    monthlyPayment: totalMonthlyPayment,
+                                    totalPayment: totalRemaining,
+                                    payments: loans.map((loan, index) => {
+                                        const termInMonths = loan.term * (loan.termUnit === 'years' ? 12 : 1);
+                                        const totalInterest = (loan.monthlyPayment * termInMonths) - loan.amount;
+                                        
+                                        return {
+                                            number: index + 1,
+                                            principal: loan.amount, // Original loan amount
+                                            interest: totalInterest, // Total interest over life of loan
+                                            balance: loan.monthlyPayment, // Using balance field to store monthly payment for portfolio
+                                            date: `${loan.name || `Loan ${index + 1}`} | ${loan.interestRate}% | ${loan.term}${loan.termUnit.charAt(0)}`
+                                        };
+                                    })
+                                };
+                                
+                                // Generate PDF using robust pdf-lib
+                                const pdfBytes = await generateRobustLoanPDF(portfolioData);
+                                
+                                // Save to device
+                                const filename = 'loan_portfolio_summary.pdf';
+                                const uri = FileSystem.documentDirectory + filename;
+                                
+                                // Convert Uint8Array to base64 string
+                                const base64String = btoa(String.fromCharCode(...pdfBytes));
+                                
+                                await FileSystem.writeAsStringAsync(uri, base64String, {
+                                    encoding: 'base64',
+                                });
+                                
+                                // Share - completely isolated with try-catch
+                                try {
+                                    await Sharing.shareAsync(uri, { 
+                                        mimeType: 'application/pdf',
+                                        dialogTitle: 'Share Loan Portfolio Summary'
+                                    });
+                                } catch {
+                                    // Silently ignore all share errors including dismissals
+                                }
+                            } catch (error) {
+                                // Only show alert for actual PDF generation errors
+                                if (error instanceof Error && !error.message.includes('cancel')) {
+                                    Alert.alert("Error", "Failed to generate PDF");
+                                }
                             }
-                            h1 { 
-                                color: #60A5FA; 
-                                border-bottom: 3px solid #60A5FA;
-                                padding-bottom: 10px;
-                                margin-bottom: 20px;
-                            }
-                            h2 {
-                                color: #3B82F6;
-                                margin-top: 25px;
-                                margin-bottom: 15px;
-                            }
-                            .summary-box {
-                                background-color: #EFF6FF;
-                                padding: 20px;
-                                border-radius: 8px;
-                                margin: 20px 0;
-                            }
-                            .summary-row {
-                                display: flex;
-                                justify-content: space-between;
-                                padding: 12px 0;
-                                border-bottom: 1px solid #BFDBFE;
-                            }
-                            .summary-label {
-                                font-weight: bold;
-                                color: #1E40AF;
-                            }
-                            .summary-value {
-                                color: #1E3A8A;
-                                font-weight: 600;
-                                font-size: 18px;
-                            }
-                            table {
-                                width: 100%;
-                                border-collapse: collapse;
-                                margin-top: 15px;
-                            }
-                            th {
-                                background-color: #60A5FA;
-                                color: white;
-                                padding: 12px;
-                                text-align: left;
-                            }
-                            td {
-                                padding: 10px;
-                                border-bottom: 1px solid #E5E7EB;
-                            }
-                            tr:nth-child(even) {
-                                background-color: #F9FAFB;
-                            }
-                            .footer {
-                                margin-top: 30px;
-                                padding-top: 20px;
-                                border-top: 2px solid #E5E7EB;
-                                color: #6B7280;
-                                font-size: 12px;
-                                text-align: center;
-                            }
-                        </style>
-                    </head>
-                    <body>
-                        <h1>💼 Loan Portfolio Summary</h1>
-                        
-                        <div class="summary-box">
-                            <div class="summary-row">
-                                <span class="summary-label">Total Loans:</span>
-                                <span class="summary-value">${loans.length}</span>
-                            </div>
-                            <div class="summary-row">
-                                <span class="summary-label">Total Borrowed:</span>
-                                <span class="summary-value">$${totalBorrowed.toLocaleString()}</span>
-                            </div>
-                            <div class="summary-row">
-                                <span class="summary-label">Total Remaining:</span>
-                                <span class="summary-value">$${totalRemaining.toLocaleString()}</span>
-                            </div>
-                            <div class="summary-row">
-                                <span class="summary-label">Total Monthly Payment:</span>
-                                <span class="summary-value">$${totalMonthlyPayment.toLocaleString()}</span>
-                            </div>
-                        </div>
-                        
-                        <h2>📋 All Loans</h2>
-                        <table>
-                            <tr>
-                                <th>Loan Name</th>
-                                <th>Amount</th>
-                                <th>Rate</th>
-                                <th>Term</th>
-                                <th>Monthly Payment</th>
-                            </tr>
-                            ${loans.map(loan => `
-                                <tr>
-                                    <td><strong>${loan.name || 'Unnamed Loan'}</strong></td>
-                                    <td>$${loan.amount.toLocaleString()}</td>
-                                    <td>${loan.interestRate}%</td>
-                                    <td>${loan.term} ${loan.termUnit}</td>
-                                    <td>$${loan.monthlyPayment.toFixed(2)}</td>
-                                </tr>
-                            `).join('')}
-                        </table>
-                        
-                        <div class="footer">
-                            <p>Generated by Loan Copilot on ${new Date().toLocaleDateString()}</p>
-                            <p>⚠️ This is for informational purposes only. Please verify all calculations with your lender.</p>
-                        </div>
-                    </body>
-                </html>
-            `;
-            
-            const { uri } = await Print.printToFileAsync({ html });
-            const shareResult = await Sharing.shareAsync(uri, { 
-                mimeType: 'application/pdf',
-                dialogTitle: 'Share Loan Portfolio Summary'
-            });
-            // User canceled sharing - this is normal, don't show error
-                        } catch (error) {
-                            const errorMessage = error instanceof Error ? error.message : String(error);
-                            // Don't show alert if user just dismissed/canceled
-                            if (!errorMessage.includes('cancel') && !errorMessage.includes('dismiss')) {
-                                Alert.alert("Error", "Failed to generate PDF: " + errorMessage);
-                            }
-                            console.log('PDF generation/sharing:', error);
-                        }
+                        }, 0);
                     }
                 }
             ]
@@ -399,9 +332,36 @@ export default function DashboardScreen() {
         {/* Show message if no loans exist */}
         {loans.length === 0 ? (
             <View style={styles.emptyState}>
-                <Text style={styles.emptyIcon}>📋</Text>
-                <Text style={styles.emptyText}>No loans yet</Text>
-                <Text style={styles.emptySubtext}>Create your first loan to start tracking your financial goals</Text>
+                <Image 
+                    source={require('../../../assets/icon.png')}
+                    style={styles.emptyIllustration}
+                    resizeMode="contain"
+                />
+                <Text style={styles.emptyText}>Start Your Financial Journey</Text>
+                <Text style={styles.emptySubtext}>Track loans, visualize payments, and reach your goals faster</Text>
+                
+                <TouchableOpacity 
+                    style={styles.emptyCTA}
+                    onPress={() => router.push('/(tabs)/createLoan')}
+                    activeOpacity={0.8}
+                >
+                    <Text style={styles.emptyCTAText}>Create Your First Loan</Text>
+                </TouchableOpacity>
+
+                <View style={styles.emptyFeatures}>
+                    <View style={styles.emptyFeature}>
+                        <Text style={styles.emptyFeatureIcon}>✓</Text>
+                        <Text style={styles.emptyFeatureText}>Track multiple loans in one place</Text>
+                    </View>
+                    <View style={styles.emptyFeature}>
+                        <Text style={styles.emptyFeatureIcon}>✓</Text>
+                        <Text style={styles.emptyFeatureText}>Visualize payment schedules & savings</Text>
+                    </View>
+                    <View style={styles.emptyFeature}>
+                        <Text style={styles.emptyFeatureIcon}>✓</Text>
+                        <Text style={styles.emptyFeatureText}>Plan extra payments to save interest</Text>
+                    </View>
+                </View>
             </View>
         ) : (
             // Display all loans as cards
@@ -470,6 +430,10 @@ export default function DashboardScreen() {
                                             <View style={styles.detailRow}>
                                                 <Text style={styles.detailLabel}>Start Date</Text>
                                                 <Text style={styles.detailValue}>{new Date(loan.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</Text>
+                                            </View>
+                                            <View style={styles.detailRow}>
+                                                <Text style={styles.detailLabel}>Remaining Balance</Text>
+                                                <Text style={[styles.detailValue, { color: theme.colors.primary }]}>${calculateRemainingPrincipal(loan).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</Text>
                                             </View>
                                             <View style={styles.detailRow}>
                                                 <Text style={styles.detailLabel}>Total Payment</Text>
@@ -547,6 +511,19 @@ export default function DashboardScreen() {
                             <Text style={styles.menuSubtext}>Learn how to use the app</Text>
                         </View>
                     </TouchableOpacity>
+                    
+                    <Link href="/(tabs)/notificationSettings" asChild>
+                        <TouchableOpacity 
+                            style={styles.menuItem}
+                            onPress={() => setShowSettings(false)}
+                        >
+                            <Text style={styles.menuIcon}>🔔</Text>
+                            <View style={styles.menuTextContainer}>
+                                <Text style={styles.menuText}>Notifications</Text>
+                                <Text style={styles.menuSubtext}>Manage payment reminders</Text>
+                            </View>
+                        </TouchableOpacity>
+                    </Link>
                     
                     <Link href="/(tabs)/about" asChild>
                         <TouchableOpacity 
@@ -716,24 +693,61 @@ const styles = StyleSheet.create({
     // Empty state shown when no loans exist
     emptyState: {
         alignItems: "center",
-        marginTop: 80,
+        marginTop: 40,
         paddingHorizontal: theme.spacing.xl,
     },
-    emptyIcon: {
-        fontSize: 64,
-        marginBottom: theme.spacing.lg,
+    emptyIllustration: {
+        width: 120,
+        height: 120,
+        marginBottom: theme.spacing.xl,
     },
     emptyText: {
-        fontSize: theme.fontSize.xl,
+        fontSize: theme.fontSize.xxl,
         color: theme.colors.textPrimary,
-        fontWeight: theme.fontWeight.semibold,
+        fontWeight: theme.fontWeight.bold,
         marginBottom: theme.spacing.sm,
+        textAlign: 'center',
     },
     emptySubtext: {
         fontSize: theme.fontSize.base,
         color: theme.colors.textSecondary,
         textAlign: 'center',
         lineHeight: 22,
+        marginBottom: theme.spacing.xl,
+    },
+    emptyCTA: {
+        backgroundColor: theme.colors.primary,
+        paddingVertical: theme.spacing.lg,
+        paddingHorizontal: theme.spacing.xl * 1.5,
+        borderRadius: theme.borderRadius.lg,
+        marginBottom: theme.spacing.xl,
+        ...theme.shadows.md,
+    },
+    emptyCTAText: {
+        color: theme.colors.textInverse,
+        fontSize: theme.fontSize.lg,
+        fontWeight: theme.fontWeight.semibold,
+    },
+    emptyFeatures: {
+        width: '100%',
+        gap: theme.spacing.md,
+        marginTop: theme.spacing.md,
+    },
+    emptyFeature: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: theme.spacing.md,
+        paddingVertical: theme.spacing.sm,
+    },
+    emptyFeatureIcon: {
+        fontSize: 20,
+        color: theme.colors.primary,
+        fontWeight: theme.fontWeight.bold,
+    },
+    emptyFeatureText: {
+        fontSize: theme.fontSize.base,
+        color: theme.colors.textSecondary,
+        flex: 1,
     },
     // Container for all loan cards
     loansContainer: {

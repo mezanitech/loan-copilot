@@ -14,6 +14,9 @@ import DualLineChart from "../../components/DualLineChart";
 import PaymentDetailCard from "../../components/PaymentDetailCard";
 // Import calculation utilities
 import { calculatePayment, generatePaymentSchedule, convertTermToMonths } from "../../utils/loanCalculations";
+// Import notification utilities
+import { schedulePaymentReminders } from "../../utils/notificationUtils";
+import { getNotificationPreferences } from "../../utils/storage";
 
 
 export default function CreateLoanScreen() {
@@ -85,6 +88,12 @@ export default function CreateLoanScreen() {
 
     // Handle date selection from date picker
     const onDateChange = (event: any, selectedDate?: Date) => {
+        // On Android, always close the picker when user interacts
+        if (Platform.OS === 'android') {
+            setShowDatePicker(false);
+        }
+        
+        // Update date if a valid date was selected
         if (selectedDate) {
             setDate(selectedDate);
         }
@@ -175,8 +184,31 @@ export default function CreateLoanScreen() {
             // Get existing loans from storage
             const existingLoans = await AsyncStorage.getItem('loans');
             const loans = existingLoans ? JSON.parse(existingLoans) : [];
+            
+            // Schedule notifications if enabled
+            const notificationPrefs = await getNotificationPreferences();
+            let scheduledNotificationIds: string[] = [];
+            
+            if (notificationPrefs.enabled) {
+                const termInMonths = convertTermToMonths(termValue, termUnit);
+                scheduledNotificationIds = await schedulePaymentReminders(
+                    newLoan.id,
+                    loanName,
+                    monthlyPayment,
+                    getStartDate(),
+                    termInMonths,
+                    notificationPrefs.reminderDays
+                );
+            }
+            
+            // Add notification IDs to loan object
+            const loanWithNotifications = {
+                ...newLoan,
+                scheduledNotificationIds
+            };
+            
             // Add new loan to array
-            loans.push(newLoan);
+            loans.push(loanWithNotifications);
             // Save back to storage
             await AsyncStorage.setItem('loans', JSON.stringify(loans));
             
@@ -284,7 +316,7 @@ export default function CreateLoanScreen() {
                             mode="date"
                             display="spinner"
                             onChange={onDateChange}
-                            textColor="#000000"
+                            textColor={theme.colors.textPrimary}
                             themeVariant="light"
                         />
                         <TouchableOpacity 
@@ -312,7 +344,7 @@ export default function CreateLoanScreen() {
             <LineChart
                 title="Principal Balance Over Time"
                 data={paymentSchedule.map(p => ({ value: p.balance }))}
-                color="#007AFF"
+                color={theme.colors.primary}
                 yAxisFormatter={(v) => `$${parseFloat(loanAmount) ? (v).toLocaleString() : '0'}`}
             />
         )}
@@ -422,7 +454,7 @@ const styles = StyleSheet.create({
     },
     // Primary "Create Loan" button
     createButton: {
-        backgroundColor: theme.colors.success,
+        backgroundColor: theme.colors.primary,
         padding: theme.spacing.lg,
         borderRadius: theme.borderRadius.lg,
         alignItems: "center",

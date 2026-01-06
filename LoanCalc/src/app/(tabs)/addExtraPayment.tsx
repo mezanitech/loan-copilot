@@ -5,7 +5,7 @@ import { useFocusEffect, router } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { theme } from '../../constants/theme';
 import InputField from "../../components/InputField";
-import EarlyPaymentList, { EarlyPaymentListRef } from "../../components/EarlyPaymentList";
+import EarlyPaymentList, { EarlyPaymentListRef, isValidEarlyPayment } from "../../components/EarlyPaymentList";
 
 type Loan = {
     id: string;
@@ -43,7 +43,6 @@ export default function AddExtraPaymentScreen() {
     const [month, setMonth] = useState("");
     const [frequency, setFrequency] = useState("1");
     const [showMonthPicker, setShowMonthPicker] = useState(false);
-    const [selectedDate, setSelectedDate] = useState(new Date());
 
     // Load loans from storage
     const loadLoans = async () => {
@@ -55,6 +54,31 @@ export default function AddExtraPaymentScreen() {
         } catch (error) {
             console.error('Failed to load loans:', error);
         }
+    };
+
+    // Calculate remaining principal for a loan
+    const calculateRemainingPrincipal = (loan: Loan): number => {
+        const startDate = new Date(loan.startDate);
+        const currentDate = new Date();
+        const monthsPassed = Math.max(0, 
+            (currentDate.getFullYear() - startDate.getFullYear()) * 12 + 
+            (currentDate.getMonth() - startDate.getMonth())
+        );
+        
+        const termInMonths = loan.termUnit === 'years' ? loan.term * 12 : loan.term;
+        const paymentsMade = Math.min(monthsPassed, termInMonths);
+        
+        if (paymentsMade >= termInMonths || loan.interestRate === 0) {
+            return Math.max(0, loan.amount - (loan.monthlyPayment * paymentsMade));
+        }
+        
+        const monthlyRate = loan.interestRate / 100 / 12;
+        const totalPayments = termInMonths;
+        const remaining = loan.amount * 
+            (Math.pow(1 + monthlyRate, totalPayments) - Math.pow(1 + monthlyRate, paymentsMade)) /
+            (Math.pow(1 + monthlyRate, totalPayments) - 1);
+        
+        return Math.max(0, remaining);
     };
 
     useFocusEffect(
@@ -95,8 +119,13 @@ export default function AddExtraPaymentScreen() {
 
     // Handle month selection
     const handleMonthChange = (event: any, selectedDateValue: Date | undefined) => {
+        // On Android, always close the picker when user interacts
+        if (Platform.OS === 'android') {
+            setShowMonthPicker(false);
+        }
+        
+        // Update month if a valid date was selected
         if (selectedDateValue) {
-            setSelectedDate(selectedDateValue);
             const loanStartDate = getSelectedLoanStartDate();
             const yearDiff = selectedDateValue.getFullYear() - loanStartDate.getFullYear();
             const monthDiff = selectedDateValue.getMonth() - loanStartDate.getMonth();
@@ -124,9 +153,12 @@ export default function AddExtraPaymentScreen() {
 
     // Get date for month picker
     const getDateForMonth = (): Date => {
-        if (!month) return new Date();
-        const paymentMonth = parseInt(month) || 1;
         const loanStartDate = getSelectedLoanStartDate();
+        if (!month) {
+            // Default to loan start date (month 1) when no month is selected
+            return loanStartDate;
+        }
+        const paymentMonth = parseInt(month) || 1;
         const actualDate = new Date(loanStartDate);
         actualDate.setMonth(actualDate.getMonth() + paymentMonth - 1);
         return actualDate;
@@ -321,9 +353,11 @@ export default function AddExtraPaymentScreen() {
                         <TouchableOpacity
                             style={styles.strategyCard}
                             onPress={() => {
-                                const smallestBalanceLoan = loans.reduce((smallest, current) => 
-                                    current.amount < smallest.amount ? current : smallest
-                                );
+                                const smallestBalanceLoan = loans.reduce((smallest, current) => {
+                                    const smallestRemaining = calculateRemainingPrincipal(smallest);
+                                    const currentRemaining = calculateRemainingPrincipal(current);
+                                    return currentRemaining < smallestRemaining ? current : smallest;
+                                });
                                 setSelectedLoanId(smallestBalanceLoan.id);
                             }}
                         >
@@ -335,14 +369,17 @@ export default function AddExtraPaymentScreen() {
                                 Pay off smallest balance first to build momentum and motivation with quick wins.
                             </Text>
                             {(() => {
-                                const smallestBalanceLoan = loans.reduce((smallest, current) => 
-                                    current.amount < smallest.amount ? current : smallest
-                                );
+                                const smallestBalanceLoan = loans.reduce((smallest, current) => {
+                                    const smallestRemaining = calculateRemainingPrincipal(smallest);
+                                    const currentRemaining = calculateRemainingPrincipal(current);
+                                    return currentRemaining < smallestRemaining ? current : smallest;
+                                });
+                                const remainingBalance = calculateRemainingPrincipal(smallestBalanceLoan);
                                 return (
                                     <View style={styles.strategyRecommendation}>
                                         <Text style={styles.strategyRecommendText}>Recommended loan:</Text>
                                         <Text style={styles.strategyLoanName}>
-                                            {smallestBalanceLoan.name || 'Unnamed Loan'} (${smallestBalanceLoan.amount.toLocaleString()})
+                                            {smallestBalanceLoan.name || 'Unnamed Loan'} (${remainingBalance.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})} remaining)
                                         </Text>
                                     </View>
                                 );
@@ -407,11 +444,11 @@ export default function AddExtraPaymentScreen() {
                         >
                             <View style={styles.datePickerContainer}>
                                 <DateTimePicker
-                                    value={month ? getDateForMonth() : selectedDate}
+                                    value={getDateForMonth()}
                                     mode="date"
                                     display="spinner"
                                     onChange={handleMonthChange}
-                                    textColor="#000000"
+                                    textColor={theme.colors.textPrimary}
                                     themeVariant="light"
                                 />
                                 <TouchableOpacity
@@ -435,10 +472,12 @@ export default function AddExtraPaymentScreen() {
                             payments={existingPayments}
                             onPaymentsChange={(updatedPayments) => {
                                 setExistingPayments(updatedPayments);
-                                // Update the loan in storage
+                                // Filter out invalid payments before saving
+                                const validPayments = updatedPayments.filter(isValidEarlyPayment);
+                                // Update the loan in storage with only valid payments
                                 const updatedLoans = loans.map(loan => {
                                     if (loan.id === selectedLoanId) {
-                                        return { ...loan, earlyPayments: updatedPayments };
+                                        return { ...loan, earlyPayments: validPayments };
                                     }
                                     return loan;
                                 });
@@ -637,7 +676,7 @@ const styles = StyleSheet.create({
         padding: theme.spacing.md,
         borderRadius: theme.borderRadius.md,
         borderLeftWidth: 4,
-        borderLeftColor: '#FFC107',
+        borderLeftColor: theme.colors.warning,
         marginBottom: theme.spacing.lg,
     },
     disclaimerText: {
@@ -720,7 +759,7 @@ const styles = StyleSheet.create({
         ...theme.shadows.md,
     },
     saveButton: {
-        backgroundColor: theme.colors.success,
+        backgroundColor: theme.colors.primary,
         padding: theme.spacing.lg,
         borderRadius: theme.borderRadius.lg,
         alignItems: 'center',

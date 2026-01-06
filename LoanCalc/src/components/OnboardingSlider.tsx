@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Asset } from 'expo-asset';
+import { theme } from '../constants/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -25,41 +26,49 @@ interface OnboardingSliderProps {
 const slides = [
   {
     id: 1,
-    title: 'Track All Your Loans',
-    description: 'Manage multiple loans in one place. See your total debt, monthly payments, and remaining balances with interactive pie charts.',
-    icon: 'stats-chart' as keyof typeof Ionicons.glyphMap,
+    title: 'Drowning in Debt?',
+    description: 'Multiple loans, scattered payments, unclear timelines. Sound familiar? You\'re not alone, and there\'s a better way.',
+    icon: 'alert-circle' as keyof typeof Ionicons.glyphMap,
     image: require('../../assets/onboarding/slide1.webp'),
   },
   {
     id: 2,
-    title: 'Smart Payment Strategies',
-    description: 'Add extra payments using Avalanche (highest interest) or Snowball (smallest balance) methods to save thousands in interest.',
-    icon: 'calculator' as keyof typeof Ionicons.glyphMap,
+    title: 'Take Control Today',
+    description: 'See all your loans in one beautiful dashboard. Track total debt, monthly payments, and remaining balances with crystal-clear visuals.',
+    icon: 'stats-chart' as keyof typeof Ionicons.glyphMap,
     image: require('../../assets/onboarding/slide2.webp'),
   },
   {
     id: 3,
-    title: 'Visualize Your Progress',
-    description: 'Beautiful charts show your balance shrinking over time. See exactly where your money goes with principal vs interest breakdown.',
-    icon: 'trending-down' as keyof typeof Ionicons.glyphMap,
+    title: 'Crush Your Debt Faster',
+    description: 'Discover how extra payments can save you thousands in interest and shave years off your loans. See the impact instantly.',
+    icon: 'flash' as keyof typeof Ionicons.glyphMap,
     image: require('../../assets/onboarding/slide3.webp'),
   },
   {
     id: 4,
-    title: 'Export & Share',
-    description: 'Generate detailed PDF reports of your loans and payment schedules. Share or keep for your records.',
-    icon: 'document-text' as keyof typeof Ionicons.glyphMap,
+    title: 'Smart Payment Plans',
+    description: 'Use proven strategies like Avalanche (highest interest first) or Snowball (smallest balance first) to optimize your payoff journey.',
+    icon: 'bulb' as keyof typeof Ionicons.glyphMap,
     image: require('../../assets/onboarding/slide4.webp'),
   },
   {
     id: 5,
-    title: 'Get Started',
-    description: 'Create your first loan to see payment schedules, savings calculators, and how extra payments can help you become debt-free faster.',
-    icon: 'rocket' as keyof typeof Ionicons.glyphMap,
+    title: 'Your Journey to Freedom',
+    description: 'Watch your progress with beautiful charts. See your balance shrink, track where every dollar goes, and celebrate milestones along the way.',
+    icon: 'trending-up' as keyof typeof Ionicons.glyphMap,
     image: [
       require('../../assets/onboarding/slide5.webp'),
       require('../../assets/onboarding/slide6.webp'),
     ],
+  },
+  {
+    id: 6,
+    title: 'Ready to Begin?',
+    description: 'Create your first loan in seconds. Get instant payment schedules, savings projections, and a clear path to being debt-free.',
+    icon: 'checkmark-circle' as keyof typeof Ionicons.glyphMap,
+    image: undefined,
+    showLogo: true,
   },
 ];
 
@@ -139,7 +148,7 @@ export default function OnboardingSlider({ visible, onComplete }: OnboardingSlid
       <View style={styles.container}>
         {isLoading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#007AFF" />
+            <ActivityIndicator size="large" color={theme.colors.primary} />
             <Text style={styles.loadingText}>Loading...</Text>
             <View style={styles.progressBar}>
               <View style={[styles.progressFill, { width: `${loadingProgress}%` }]} />
@@ -181,9 +190,17 @@ export default function OnboardingSlider({ visible, onComplete }: OnboardingSlid
                     <Image source={slide.image} style={styles.slideImage} resizeMode="contain" />
                   </View>
                 )
+              ) : slide.showLogo ? (
+                <View style={styles.logoContainer}>
+                  <Image
+                    source={require('../../assets/icon.png')}
+                    style={styles.logoImage}
+                    resizeMode="contain"
+                  />
+                </View>
               ) : (
                 <View style={styles.iconContainer}>
-                  <Ionicons name={slide.icon} size={80} color="#007AFF" />
+                  <Ionicons name={slide.icon} size={80} color={theme.colors.primary} />
                 </View>
               )}
               <Text style={styles.title}>{slide.title}</Text>
@@ -223,12 +240,12 @@ export default function OnboardingSlider({ visible, onComplete }: OnboardingSlid
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surface,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    paddingHorizontal: 20,
+    paddingHorizontal: theme.spacing.xl,
     paddingTop: 50,
     paddingBottom: 10,
   },
@@ -236,9 +253,9 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   skipButtonText: {
-    color: '#007AFF',
-    fontSize: 16,
-    fontWeight: '600',
+    color: theme.colors.primary,
+    fontSize: theme.fontSize.base,
+    fontWeight: theme.fontWeight.semibold,
   },
   scrollView: {
     flex: 1,
@@ -253,18 +270,21 @@ const styles = StyleSheet.create({
   iconContainer: {
     marginBottom: 40,
   },
+  logoContainer: {
+    marginBottom: 40,
+  },
+  logoImage: {
+    width: 140,
+    height: 140,
+  },
   imageFrame: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.lg,
     padding: 8,
     marginBottom: 30,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    ...theme.shadows.md,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
+    borderColor: theme.colors.gray200,
   },
   slideImage: {
     width: SCREEN_WIDTH * 0.75,
@@ -277,16 +297,12 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   dualImageFrame: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.md,
     padding: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    ...theme.shadows.md,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
+    borderColor: theme.colors.gray200,
   },
   dualSlideImage: {
     width: SCREEN_WIDTH * 0.35,
@@ -294,15 +310,15 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#333',
-    marginBottom: 20,
+    fontSize: theme.fontSize.xxxl,
+    fontWeight: theme.fontWeight.bold,
+    color: theme.colors.textPrimary,
+    marginBottom: theme.spacing.xl,
     textAlign: 'center',
   },
   description: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: theme.fontSize.base,
+    color: theme.colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
   },
@@ -310,7 +326,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 20,
+    paddingVertical: theme.spacing.xl,
   },
   dot: {
     width: 8,
@@ -319,26 +335,27 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   dotActive: {
-    backgroundColor: '#007AFF',
+    backgroundColor: theme.colors.primary,
     width: 24,
   },
   dotInactive: {
-    backgroundColor: '#D1D1D6',
+    backgroundColor: theme.colors.gray300,
   },
   footer: {
-    paddingHorizontal: 20,
+    paddingHorizontal: theme.spacing.xl,
     paddingBottom: 40,
   },
   nextButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 16,
-    borderRadius: 12,
+    backgroundColor: theme.colors.primary,
+    paddingVertical: theme.spacing.lg,
+    borderRadius: theme.borderRadius.md,
     alignItems: 'center',
+    ...theme.shadows.md,
   },
   nextButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
+    color: theme.colors.textInverse,
+    fontSize: theme.fontSize.lg,
+    fontWeight: theme.fontWeight.semibold,
   },
   loadingContainer: {
     flex: 1,
@@ -347,28 +364,28 @@ const styles = StyleSheet.create({
     padding: 40,
   },
   loadingText: {
-    marginTop: 20,
-    fontSize: 16,
-    color: '#666',
-    fontWeight: '600',
+    marginTop: theme.spacing.xl,
+    fontSize: theme.fontSize.base,
+    color: theme.colors.textSecondary,
+    fontWeight: theme.fontWeight.semibold,
   },
   progressBar: {
     width: '80%',
     height: 4,
-    backgroundColor: '#E5E5EA',
+    backgroundColor: theme.colors.gray200,
     borderRadius: 2,
     marginTop: 30,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#007AFF',
+    backgroundColor: theme.colors.primary,
     borderRadius: 2,
   },
   progressText: {
     marginTop: 10,
-    fontSize: 14,
-    color: '#007AFF',
-    fontWeight: '600',
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.primary,
+    fontWeight: theme.fontWeight.semibold,
   },
 });

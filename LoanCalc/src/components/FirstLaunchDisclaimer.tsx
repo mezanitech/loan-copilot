@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
     disclaimerBox: {
         backgroundColor: '#FFF9E6',
         borderWidth: 2,
-        borderColor: '#FFA500',
+        borderColor: theme.colors.warning,
         borderRadius: 12,
         padding: 20,
     },
@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
         marginTop: 16,
         paddingTop: 16,
         borderTopWidth: 1,
-        borderTopColor: '#FFD699',
+        borderTopColor: theme.colors.gray200,
     },
     sectionTitle: {
         fontSize: theme.fontSize.lg,

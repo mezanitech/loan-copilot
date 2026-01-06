@@ -5,9 +5,10 @@ type PaymentSummaryProps = {
     monthlyPayment: number;
     totalPayment: number;
     loanAmount: string;
+    remainingBalance?: number;
 };
 
-export default function PaymentSummary({ monthlyPayment, totalPayment, loanAmount }: PaymentSummaryProps) {
+export default function PaymentSummary({ monthlyPayment, totalPayment, loanAmount, remainingBalance }: PaymentSummaryProps) {
     const totalInterest = totalPayment - parseFloat(loanAmount || "0");
     
     return (
@@ -28,6 +29,12 @@ export default function PaymentSummary({ monthlyPayment, totalPayment, loanAmoun
                     <Text style={styles.label}>💰 Total Amount</Text>
                     <Text style={styles.value}>${totalPayment.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</Text>
                 </View>
+                {remainingBalance !== undefined && (
+                    <View style={styles.row}>
+                        <Text style={styles.label}>💳 Remaining Balance</Text>
+                        <Text style={[styles.value, { color: theme.colors.primary }]}>${remainingBalance.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</Text>
+                    </View>
+                )}
                 <View style={styles.row}>
                     <Text style={styles.label}>📈 Total Interest</Text>
                     <Text style={[styles.value, styles.interestValue]}>${totalInterest.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</Text>

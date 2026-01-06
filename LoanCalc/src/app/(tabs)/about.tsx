@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
         padding: theme.spacing.lg,
         borderRadius: theme.borderRadius.lg,
         borderLeftWidth: 4,
-        borderLeftColor: '#FFC107',
+        borderLeftColor: theme.colors.warning,
         marginBottom: theme.spacing.xxl,
     },
     disclaimerTitle: {
