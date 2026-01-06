@@ -1,0 +1,56 @@
+APP STORE DESCRIPTION FOR LOAN CO-PILOT
+========================================
+
+Take Control of Your Debt Journey
+
+Loan Co-Pilot is your personal financial companion for managing loans and accelerating your path to becoming debt-free. Whether you have a mortgage, student loans, car payments, or personal debts, Loan Copilot gives you the clarity and tools you need to take control.
+
+Key Features:
+
+COMPREHENSIVE DASHBOARD
+• Track all your loans in one beautiful interface
+• See total debt, monthly payments, and remaining balances at a glance
+• Visual charts show your progress over time
+
+SMART PAYMENT STRATEGIES
+• Avalanche method: Pay off highest interest loans first to save the most money
+• Snowball method: Tackle smallest balances first for quick wins and motivation
+• See exactly how much interest you'll save with each approach
+
+EXTRA PAYMENT IMPACT
+• Instantly see how extra payments affect your timeline
+• Calculate how much you'll save in interest
+• Watch years disappear from your loan terms
+
+BEAUTIFUL VISUALIZATIONS
+• Clear charts show principal vs. interest breakdown
+• Track your balance shrinking over time
+• Celebrate milestones on your journey to freedom
+
+100% PRIVATE & SECURE
+• All data stored locally on your device only
+• No account required, no data collection
+• Your financial information never leaves your phone
+
+Perfect For:
+• Homeowners managing mortgages
+• Graduates paying off student loans
+• Anyone with multiple debts to track
+• People serious about becoming debt-free faster
+
+Download Loan Co-Pilot today and start your journey to financial freedom!
+
+========================================
+ADDITIONAL INFO FOR APP STORE CONNECT
+========================================
+
+Privacy Policy URL: https://mezanitech.github.io/loan-copilot-privacy/
+Support URL: https://mezanitech.github.io/loan-copilot-privacy/
+Support Email: tareq_musmar@hotmail.com
+
+Keywords (suggested):
+loan calculator, debt tracker, mortgage, payoff, debt, amortization, loan manager, interest calculator, snowball, avalanche
+
+Category: Finance
+
+Age Rating: 4+ (No objectionable content)

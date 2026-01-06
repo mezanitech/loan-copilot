@@ -21,8 +21,10 @@ import { calculatePayment, generatePaymentSchedule, calculateSavings, convertTer
 // Import notification utilities
 import { schedulePaymentReminders, cancelLoanNotifications } from "../../../utils/notificationUtils";
 import { getNotificationPreferences } from "../../../utils/storage";
-// Import PDF utilities
-import { generateRobustLoanPDF } from "../../../utils/pdfLibReportUtils";
+// Import PDF utilities - only on native platforms
+const generateRobustLoanPDF = Platform.OS !== 'web'
+  ? require("../../../utils/pdfLibReportUtils").generateRobustLoanPDF
+  : null;
 import { formatPeriod } from "../../../utils/reportUtils";
 
 export default function LoanOverviewScreen() {
@@ -243,6 +245,12 @@ export default function LoanOverviewScreen() {
 
     // Robust PDF generation function using pdf-lib
     const generateTestPDF = async () => {
+        // PDF generation not available on web
+        if (Platform.OS === 'web' || !generateRobustLoanPDF) {
+            Alert.alert("Not Available", "PDF generation is only available on mobile devices.");
+            return;
+        }
+        
         setTimeout(async () => {
             try {
                 // Filter out invalid early payments before generating PDF

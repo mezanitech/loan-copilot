@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Loan Copilot",
+    "name": "Loan Co-Pilot",
     "slug": "loan-copilot",
     "scheme": "loancopilot",
     "version": "1.0.0",
@@ -9,6 +9,7 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "description": "Your copilot for managing loans. Track payments, visualize progress, and navigate your path to financial freedom.",
+    "privacyPolicy": "https://mezanitech.github.io/loan-copilot-privacy/",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",

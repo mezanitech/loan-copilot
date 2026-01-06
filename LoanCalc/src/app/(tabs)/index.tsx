@@ -1,7 +1,7 @@
 // Import necessary components and hooks from React Native and Expo Router
 import { Link, useFocusEffect, useRouter } from "expo-router";
 import { useState, useCallback } from "react";
-import { Text, View, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, Image } from "react-native";
+import { Text, View, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, Image, Platform } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -9,7 +9,11 @@ import { theme } from '../../constants/theme';
 import PieChart from '../../components/PieChart';
 import OnboardingSlider from '../../components/OnboardingSlider';
 import { cancelLoanNotifications } from '../../utils/notificationUtils';
-import { generateRobustLoanPDF } from '../../utils/pdfLibReportUtils';
+
+// Only import PDF generation on native platforms
+const generateRobustLoanPDF = Platform.OS !== 'web' 
+  ? require('../../utils/pdfLibReportUtils').generateRobustLoanPDF 
+  : null;
 
 // Define the structure of a Loan object
 type Loan = {
@@ -87,6 +91,12 @@ export default function DashboardScreen() {
 
     // Export all loans to PDF
     const exportAllLoansPDF = async () => {
+        // PDF generation not available on web
+        if (Platform.OS === 'web' || !generateRobustLoanPDF) {
+            Alert.alert("Not Available", "PDF generation is only available on mobile devices.");
+            return;
+        }
+        
         if (loans.length === 0) {
             Alert.alert("No Loans", "Add some loans first to export a report.");
             return;

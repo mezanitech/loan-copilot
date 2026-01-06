@@ -86,9 +86,9 @@ We may update this Privacy Policy from time to time. Any changes will be reflect
 
 ## Contact Us
 
-If you have questions about this Privacy Policy, please contact us through:
+If you have questions about this Privacy Policy or need support, please contact us at:
+- Email: tareq_musmar@hotmail.com
 - App Store review/support
-- The contact information provided in the App Store listing
 
 ## Disclaimer
 
