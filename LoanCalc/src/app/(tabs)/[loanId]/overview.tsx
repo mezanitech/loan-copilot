@@ -69,14 +69,19 @@ export default function LoanOverviewScreen() {
 
     // Handle date selection from date picker
     const onDateChange = (event: any, selectedDate?: Date) => {
-        // On Android, always close the picker when user interacts
-        if (Platform.OS === 'android') {
+        // On Android, dismiss event is sent when user cancels
+        if (Platform.OS === 'android' && event.type === 'dismissed') {
             setShowDatePicker(false);
+            return;
         }
         
         // Update date if a valid date was selected
         if (selectedDate) {
             setDate(selectedDate);
+            // Close picker on Android after selection
+            if (Platform.OS === 'android') {
+                setShowDatePicker(false);
+            }
             triggerAutoSave();
         }
     };
@@ -107,16 +112,41 @@ export default function LoanOverviewScreen() {
     // Reload loan data when tab comes into focus (to reflect changes from payments tab)
     useFocusEffect(
         useCallback(() => {
-            if (loanId) {
-                loadLoan(loanId);
-                loadCurrency();
-            }
-        }, [loanId])
+            // Reload currency and earlyPayments (in case they changed in payments tab)
+            // but NOT the other loan data to prevent overwriting user changes
+            loadCurrency();
+            loadEarlyPayments();
+            
+            // Save any pending changes when navigating away (without debounce)
+            return () => {
+                if (isValidLoanData() && autoSaveRef.current) {
+                    // Force immediate save without debounce when navigating away
+                    autoSaveRef.current.forceSave();
+                }
+            };
+        }, [loanName, loanAmount, interestRate, term, termUnit, date, earlyPayments])
     );
 
     const loadCurrency = async () => {
         const curr = await getCurrencyPreference();
         setCurrency(curr);
+    };
+
+    const loadEarlyPayments = async () => {
+        if (!loanId) return;
+        
+        try {
+            const loansData = await AsyncStorage.getItem('loans');
+            if (loansData) {
+                const loans = JSON.parse(loansData);
+                const loan = loans.find((l: any) => l.id === loanId);
+                if (loan) {
+                    setEarlyPayments(loan.earlyPayments || []);
+                }
+            }
+        } catch (error) {
+            console.error('Error loading early payments:', error);
+        }
     };
 
     // Load loan details from AsyncStorage and populate form fields

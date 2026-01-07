@@ -99,6 +99,12 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
     };
 
     const handleMonthChange = (event: any, selectedDate: Date | undefined, paymentId: string) => {
+        // On Android, dismiss event is sent when user cancels
+        if (Platform.OS === 'android' && event.type === 'dismissed') {
+            setActiveMonthPicker(null);
+            return;
+        }
+        
         if (selectedDate) {
             // Calculate the payment month number based on loan start date
             const yearDiff = selectedDate.getFullYear() - loanStartDate.getFullYear();
@@ -108,6 +114,10 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
             // Restrict to valid payment months (1 to loanTermInMonths)
             if (totalMonthDiff >= 1 && totalMonthDiff <= loanTermInMonths) {
                 updatePayment(paymentId, "month", totalMonthDiff.toString());
+                // Close picker on Android after selection
+                if (Platform.OS === 'android') {
+                    setActiveMonthPicker(null);
+                }
             }
         }
     };

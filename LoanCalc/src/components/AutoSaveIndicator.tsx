@@ -4,6 +4,7 @@ import { theme } from '../constants/theme';
 
 export interface AutoSaveHandle {
     trigger: () => void;
+    forceSave: () => void;
 }
 
 interface AutoSaveIndicatorProps {
@@ -59,8 +60,33 @@ export const AutoSaveIndicator = forwardRef<AutoSaveHandle, AutoSaveIndicatorPro
             }, 1000);
         }, [onSave, showIndicator]);
 
+        const forceSave = useCallback(async () => {
+            // Clear any existing timers
+            if (saveTimeoutRef.current) {
+                clearTimeout(saveTimeoutRef.current);
+            }
+            if (displayTimeoutRef.current) {
+                clearTimeout(displayTimeoutRef.current);
+            }
+            if (hideTimeoutRef.current) {
+                clearTimeout(hideTimeoutRef.current);
+            }
+
+            // Save immediately without debounce
+            try {
+                await onSave();
+                setShowIndicator(false);
+                setStatus('idle');
+            } catch (error) {
+                console.error('Force save failed:', error);
+                setStatus('idle');
+                setShowIndicator(false);
+            }
+        }, [onSave]);
+
         useImperativeHandle(ref, () => ({
             trigger,
+            forceSave,
         }));
 
         if (!showIndicator) {
