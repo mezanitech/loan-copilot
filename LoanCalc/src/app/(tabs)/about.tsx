@@ -1,4 +1,4 @@
-import { Text, View, StyleSheet, ScrollView, Platform } from "react-native";
+import { Text, View, StyleSheet, ScrollView, Platform, TouchableOpacity, Linking } from "react-native";
 import { theme } from '../../constants/theme';
 
 export default function AboutScreen() {
@@ -85,6 +85,24 @@ export default function AboutScreen() {
                     All your loan data is stored locally on your device only. We do not collect, transmit, 
                     or store any of your personal or financial information on external servers. Your data 
                     remains private and under your control.
+                </Text>
+            </View>
+
+            {/* Feedback */}
+            <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Feedback & Support</Text>
+                <Text style={styles.text}>
+                    We'd love to hear from you! Share your ideas, report bugs, or ask questions in our 
+                    community forum.
+                </Text>
+                <TouchableOpacity 
+                    style={styles.feedbackButton}
+                    onPress={() => Linking.openURL('https://github.com/mezanitech/loan-copilot-feedback/discussions')}
+                >
+                    <Text style={styles.feedbackButtonText}>💬 Send Feedback</Text>
+                </TouchableOpacity>
+                <Text style={styles.text} style={[styles.text, { marginTop: theme.spacing.md }]}>
+                    For privacy concerns or direct support: tareq_musmar@hotmail.com
                 </Text>
             </View>
 
@@ -193,5 +211,18 @@ const styles = StyleSheet.create({
         fontSize: theme.fontSize.sm,
         color: theme.colors.textSecondary,
         fontStyle: 'italic',
+    },
+    feedbackButton: {
+        backgroundColor: theme.colors.primary,
+        paddingVertical: theme.spacing.md,
+        paddingHorizontal: theme.spacing.lg,
+        borderRadius: theme.borderRadius.md,
+        marginTop: theme.spacing.md,
+        alignItems: 'center',
+    },
+    feedbackButtonText: {
+        color: 'white',
+        fontSize: theme.fontSize.base,
+        fontWeight: theme.fontWeight.semibold,
     },
 });
