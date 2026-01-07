@@ -2,6 +2,8 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import { formatDateForStorage, parseDateFromStorage } from './dateUtils';
+import { getCurrencyPreference } from './storage';
+import { formatCurrency } from './currencyUtils';
 
 /**
  * Configure notification behavior
@@ -108,10 +110,11 @@ export async function schedulePaymentReminders(
         }
 
         try {
+            const currency = await getCurrencyPreference();
             await Notifications.scheduleNotificationAsync({
                 content: {
                     title: '💳 Payment Reminder',
-                    body: `Your ${loanName} payment of $${monthlyPayment.toFixed(2)} is due in ${reminderDaysBefore} day${reminderDaysBefore !== 1 ? 's' : ''}`,
+                    body: `Your ${loanName} payment of ${formatCurrency(monthlyPayment, currency)} is due in ${reminderDaysBefore} day${reminderDaysBefore !== 1 ? 's' : ''}`,
                     data: { loanId, paymentDate: dateStr },
                     sound: true,
                 },

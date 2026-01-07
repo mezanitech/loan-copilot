@@ -268,8 +268,6 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
                                                 onChange={(event, date) => handleMonthChange(event, date, payment.id)}
                                                 textColor={theme.colors.textPrimary}
                                                 themeVariant="light"
-                                                minimumDate={getMinDate()}
-                                                maximumDate={getMaxDate()}
                                             />
                                             <TouchableOpacity 
                                                 style={styles.closeButton}
@@ -314,8 +312,6 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
                                                     onChange={(event, date) => handleMonthChange(event, date, payment.id)}
                                                     textColor={theme.colors.textPrimary}
                                                     themeVariant="light"
-                                                    minimumDate={getMinDate()}
-                                                    maximumDate={getMaxDate()}
                                                 />
                                                 <TouchableOpacity 
                                                     style={styles.closeButton}

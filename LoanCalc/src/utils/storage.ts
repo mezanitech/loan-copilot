@@ -146,3 +146,66 @@ export async function saveNotificationPreferences(enabled: boolean, reminderDays
         return false;
     }
 }
+
+export type Currency = {
+    code: string;
+    symbol: string;
+    name: string;
+    position: 'before' | 'after';
+};
+
+export const CURRENCIES: Currency[] = [
+    { code: 'USD', symbol: '$', name: 'US Dollar', position: 'before' },
+    { code: 'EUR', symbol: '€', name: 'Euro', position: 'before' },
+    { code: 'GBP', symbol: '£', name: 'British Pound', position: 'before' },
+    { code: 'JPY', symbol: '¥', name: 'Japanese Yen', position: 'before' },
+    { code: 'CNY', symbol: '¥', name: 'Chinese Yuan', position: 'before' },
+    { code: 'AUD', symbol: 'A$', name: 'Australian Dollar', position: 'before' },
+    { code: 'CAD', symbol: 'C$', name: 'Canadian Dollar', position: 'before' },
+    { code: 'CHF', symbol: 'CHF', name: 'Swiss Franc', position: 'after' },
+    { code: 'INR', symbol: '₹', name: 'Indian Rupee', position: 'before' },
+    { code: 'BRL', symbol: 'R$', name: 'Brazilian Real', position: 'before' },
+    { code: 'ZAR', symbol: 'R', name: 'South African Rand', position: 'before' },
+    { code: 'SAR', symbol: '﷼', name: 'Saudi Riyal', position: 'before' },
+    { code: 'AED', symbol: 'Dhs', name: 'UAE Dirham', position: 'after' },
+    { code: 'JOD', symbol: 'JD', name: 'Jordanian Dinar', position: 'after' },
+    { code: 'EGP', symbol: 'E£', name: 'Egyptian Pound', position: 'before' },
+    { code: 'TRY', symbol: '₺', name: 'Turkish Lira', position: 'before' },
+    { code: 'KRW', symbol: '₩', name: 'South Korean Won', position: 'before' },
+    { code: 'MXN', symbol: 'Mex$', name: 'Mexican Peso', position: 'before' },
+    { code: 'RUB', symbol: '₽', name: 'Russian Ruble', position: 'before' },
+    { code: 'SEK', symbol: 'kr', name: 'Swedish Krona', position: 'after' },
+    { code: 'NOK', symbol: 'kr', name: 'Norwegian Krone', position: 'after' },
+    { code: 'SGD', symbol: 'S$', name: 'Singapore Dollar', position: 'before' },
+    { code: 'HKD', symbol: 'HK$', name: 'Hong Kong Dollar', position: 'before' },
+    { code: 'NZD', symbol: 'NZ$', name: 'New Zealand Dollar', position: 'before' },
+    { code: 'THB', symbol: '฿', name: 'Thai Baht', position: 'before' },
+    { code: 'PLN', symbol: 'zł', name: 'Polish Zloty', position: 'after' },
+];
+
+/**
+ * Get currency preference
+ */
+export async function getCurrencyPreference(): Promise<Currency> {
+    try {
+        const currencyCode = await AsyncStorage.getItem('@currency_preference');
+        const currency = CURRENCIES.find(c => c.code === currencyCode);
+        return currency || CURRENCIES[0]; // Default to USD
+    } catch (error) {
+        console.error('Error loading currency preference:', error);
+        return CURRENCIES[0];
+    }
+}
+
+/**
+ * Save currency preference
+ */
+export async function saveCurrencyPreference(currencyCode: string): Promise<boolean> {
+    try {
+        await AsyncStorage.setItem('@currency_preference', currencyCode);
+        return true;
+    } catch (error) {
+        console.error('Error saving currency preference:', error);
+        return false;
+    }
+}

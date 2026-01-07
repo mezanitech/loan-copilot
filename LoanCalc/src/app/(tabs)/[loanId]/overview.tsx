@@ -1,5 +1,5 @@
 // Import React hooks for state management and side effects
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 // Import React Native UI components
 import { Text, View, StyleSheet, TouchableOpacity, TouchableWithoutFeedback, Keyboard, ScrollView, Alert, Platform, Modal } from "react-native";
 // Import AsyncStorage for saving/loading loan data
@@ -16,11 +16,13 @@ import TermSelector from "../../../components/TermSelector";
 import PaymentSummary from "../../../components/PaymentSummary";
 import DualLineChart from "../../../components/DualLineChart";
 import { EarlyPayment, isValidEarlyPayment } from "../../../components/EarlyPaymentList";
+import { AutoSaveIndicator, AutoSaveHandle } from "../../../components/AutoSaveIndicator";
 // Import calculation utilities
 import { calculatePayment, generatePaymentSchedule, calculateSavings, convertTermToMonths } from "../../../utils/loanCalculations";
 // Import notification utilities
 import { schedulePaymentReminders, cancelLoanNotifications } from "../../../utils/notificationUtils";
-import { getNotificationPreferences } from "../../../utils/storage";
+import { getNotificationPreferences, getCurrencyPreference, Currency } from "../../../utils/storage";
+import { formatCurrency } from "../../../utils/currencyUtils";
 // Import PDF utilities - only on native platforms
 const generateRobustLoanPDF = Platform.OS !== 'web'
   ? require("../../../utils/pdfLibReportUtils").generateRobustLoanPDF
@@ -41,6 +43,29 @@ export default function LoanOverviewScreen() {
     const [date, setDate] = useState(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [earlyPayments, setEarlyPayments] = useState<EarlyPayment[]>([]); // List of additional payments
+    const autoSaveRef = useRef<AutoSaveHandle>(null);
+    const [currency, setCurrency] = useState<Currency>({ code: 'USD', symbol: '$', name: 'US Dollar', position: 'before' });
+
+    // Validation helpers
+    const isValidLoanData = () => {
+        return loanName.trim() !== '' && 
+               loanAmount.trim() !== '' && 
+               !isNaN(parseFloat(loanAmount)) && 
+               parseFloat(loanAmount) > 0 &&
+               interestRate.trim() !== '' && 
+               !isNaN(parseFloat(interestRate)) && 
+               parseFloat(interestRate) >= 0 &&
+               term.trim() !== '' && 
+               !isNaN(parseFloat(term)) && 
+               parseFloat(term) > 0;
+    };
+
+    // Trigger auto-save through the component
+    const triggerAutoSave = () => {
+        if (isValidLoanData() && autoSaveRef.current) {
+            autoSaveRef.current.trigger();
+        }
+    };
 
     // Handle date selection from date picker
     const onDateChange = (event: any, selectedDate?: Date) => {
@@ -52,6 +77,7 @@ export default function LoanOverviewScreen() {
         // Update date if a valid date was selected
         if (selectedDate) {
             setDate(selectedDate);
+            triggerAutoSave();
         }
     };
 
@@ -83,9 +109,15 @@ export default function LoanOverviewScreen() {
         useCallback(() => {
             if (loanId) {
                 loadLoan(loanId);
+                loadCurrency();
             }
         }, [loanId])
     );
+
+    const loadCurrency = async () => {
+        const curr = await getCurrencyPreference();
+        setCurrency(curr);
+    };
 
     // Load loan details from AsyncStorage and populate form fields
     const loadLoan = async (id: string) => {
@@ -152,11 +184,10 @@ export default function LoanOverviewScreen() {
     };
 
     // Calculate monthly payment using standard loan amortization formula
-    // Save updated loan data to AsyncStorage and navigate back to dashboard
+    // Save updated loan data to AsyncStorage
     const updateLoan = async () => {
         // Validate all required fields are filled
-        if (!loanName || !loanAmount || !interestRate || !term) {
-            Alert.alert("Error", "Please fill in all fields");
+        if (!isValidLoanData()) {
             return;
         }
 
@@ -233,13 +264,10 @@ export default function LoanOverviewScreen() {
                 loans[loanIndex] = loanWithNotifications;
                 // Save back to storage
                 await AsyncStorage.setItem('loans', JSON.stringify(loans));
-                Alert.alert("Success", "Loan updated successfully");
-                // Navigate back to dashboard
-                router.push('/(tabs)');
             }
         } catch (error) {
-            Alert.alert("Error", "Failed to update loan");
-            console.error(error);
+            console.error('Error updating loan:', error);
+            throw error;
         }
     };
 
@@ -288,7 +316,7 @@ export default function LoanOverviewScreen() {
                 };
                 
                 // Generate PDF using robust pdf-lib
-                const pdfBytes = await generateRobustLoanPDF(loanData, date);
+                const pdfBytes = await generateRobustLoanPDF(loanData, currency, date);
                 
                 // Save to device
                 const filename = `${loanData.name.replace(/[^a-zA-Z0-9]/g, '_')}_report.pdf`;
@@ -377,45 +405,56 @@ export default function LoanOverviewScreen() {
                 <TouchableOpacity style={styles.exportButtonTop} onPress={generateTestPDF}>
                     <Text style={styles.exportButtonTopText}>Export Report</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.saveButton} onPress={updateLoan}>
-                    <Text style={styles.saveButtonText}>Save Changes</Text>
-                </TouchableOpacity>
+                <AutoSaveIndicator ref={autoSaveRef} onSave={updateLoan} />
+                {!isValidLoanData() && (
+                    <View style={styles.errorIndicator}>
+                        <Text style={styles.errorText}>⚠️ Fix errors</Text>
+                    </View>
+                )}
             </View>
 
             {/* Loan name input */}
-            <InputField
-                label="💼 Loan Name"
-                value={loanName}
-                onChangeText={setLoanName}
-                placeholder="e.g., Car Loan, Mortgage, Student Loan"
-            />
+            <View style={loanName.trim() === '' ? styles.fieldError : null}>
+                <InputField
+                    label="💼 Loan Name"
+                    value={loanName}
+                    onChangeText={(value) => { setLoanName(value); triggerAutoSave(); }}
+                    placeholder="e.g., Car Loan, Mortgage, Student Loan"
+                />
+            </View>
 
             {/* Loan amount input */}
-            <InputField
-                label="💵 Loan Amount"
-                value={loanAmount}
-                onChangeText={setLoanAmount}
-                placeholder="Enter loan amount"
-                keyboardType="numeric"
-                formatNumber={true}
-            />
+            <View style={(loanAmount.trim() === '' || isNaN(parseFloat(loanAmount)) || parseFloat(loanAmount) <= 0) ? styles.fieldError : null}>
+                <InputField
+                    label="💵 Loan Amount"
+                    value={loanAmount}
+                    onChangeText={(value) => { setLoanAmount(value); triggerAutoSave(); }}
+                    placeholder="Enter loan amount"
+                    keyboardType="numeric"
+                    formatNumber={true}
+                />
+            </View>
 
             {/* Interest rate input */}
-            <InputField
-                label="📈 Interest Rate (%)"
-                value={interestRate}
-                onChangeText={setInterestRate}
-                placeholder="Enter interest rate"
-                keyboardType="numeric"
-            />
+            <View style={(interestRate.trim() === '' || isNaN(parseFloat(interestRate)) || parseFloat(interestRate) < 0) ? styles.fieldError : null}>
+                <InputField
+                    label="📈 Interest Rate (%)"
+                    value={interestRate}
+                    onChangeText={(value) => { setInterestRate(value); triggerAutoSave(); }}
+                    placeholder="Enter interest rate"
+                    keyboardType="numeric"
+                />
+            </View>
 
             {/* Term input with months/years toggle */}
-            <TermSelector
-                term={term}
-                onTermChange={setTerm}
-                termUnit={termUnit}
-                onTermUnitChange={setTermUnit}
-            />
+            <View style={(term.trim() === '' || isNaN(parseFloat(term)) || parseFloat(term) <= 0) ? styles.fieldError : null}>
+                <TermSelector
+                    term={term}
+                    onTermChange={(value) => { setTerm(value); triggerAutoSave(); }}
+                    termUnit={termUnit}
+                    onTermUnitChange={(value) => { setTermUnit(value); triggerAutoSave(); }}
+                />
+            </View>
 
             {/* Start date picker */}
             <View>
@@ -484,7 +523,7 @@ export default function LoanOverviewScreen() {
                             <>
                                 <View style={styles.savingsRow}>
                                     <Text style={styles.savingsLabel}>💰 Money Saved:</Text>
-                                    <Text style={styles.savingsValue}>${interestSaved.toFixed(2)}</Text>
+                                    <Text style={styles.savingsValue}>{formatCurrency(interestSaved, currency)}</Text>
                                 </View>
                                 <View style={styles.savingsRow}>
                                     <Text style={styles.savingsLabel}>⚡ Time Saved:</Text>
@@ -547,7 +586,7 @@ export default function LoanOverviewScreen() {
                         earlyPayments={[]} // Don't hide any points for balance comparison
                         legendLabels={{ principal: "Original", interest: "With Extra Payments" }}
                         colors={{ principal: theme.colors.warning, interest: theme.colors.primary }}
-                        yAxisFormatter={(value: number) => `$${(value / 1000).toFixed(0)}k`}
+                        yAxisFormatter={(value: number) => formatCurrency(value / 1000, currency, 0) + 'k'}
                     />
 
                     {/* Chart showing principal vs interest per payment */}
@@ -577,6 +616,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         gap: theme.spacing.md,
         marginBottom: theme.spacing.xl,
+        alignItems: 'center',
     },
     // Export Report button (top)
     exportButtonTop: {
@@ -594,21 +634,24 @@ const styles = StyleSheet.create({
         fontSize: theme.fontSize.base,
         fontWeight: theme.fontWeight.semibold,
     },
-    // "Save Changes" button (top)
-    saveButton: {
-        flex: 1,
-        backgroundColor: theme.colors.primary,
-        padding: theme.spacing.md,
-        borderRadius: theme.borderRadius.lg,
-        alignItems: "center",
-        borderWidth: 1,
-        borderColor: theme.colors.glassBorderPurple,
-        ...theme.shadows.glass,
+    // Error indicator
+    errorIndicator: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: theme.spacing.sm,
+        minHeight: 30,
     },
-    saveButtonText: {
-        color: theme.colors.textInverse,
-        fontSize: theme.fontSize.base,
+    errorText: {
+        color: theme.colors.error,
+        fontSize: theme.fontSize.sm,
         fontWeight: theme.fontWeight.semibold,
+    },
+    fieldError: {
+        borderWidth: 2,
+        borderColor: theme.colors.error,
+        borderRadius: theme.borderRadius.md,
+        padding: 2,
+        marginBottom: theme.spacing.sm,
     },
     // Page title
     title: {

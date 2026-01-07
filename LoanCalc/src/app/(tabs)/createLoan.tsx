@@ -1,8 +1,8 @@
 // Import React hooks and React Native components
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Text, View, StyleSheet, TouchableOpacity, TouchableWithoutFeedback, Keyboard, ScrollView, Alert, Platform, Modal } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { theme } from '../../constants/theme';
 // Import custom reusable components
@@ -12,11 +12,13 @@ import PaymentSummary from "../../components/PaymentSummary";
 import LineChart from "../../components/LineChart";
 import DualLineChart from "../../components/DualLineChart";
 import PaymentDetailCard from "../../components/PaymentDetailCard";
+import { AutoSaveIndicator, AutoSaveHandle } from "../../components/AutoSaveIndicator";
 // Import calculation utilities
 import { calculatePayment, generatePaymentSchedule, convertTermToMonths } from "../../utils/loanCalculations";
 // Import notification utilities
 import { schedulePaymentReminders } from "../../utils/notificationUtils";
 import { getNotificationPreferences } from "../../utils/storage";
+import { formatCurrency } from "../../utils/currencyUtils";
 
 
 export default function CreateLoanScreen() {
@@ -29,61 +31,94 @@ export default function CreateLoanScreen() {
     const [date, setDate] = useState(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [showAllPayments, setShowAllPayments] = useState(false); // Toggle for expanding payment details
+    const [createdLoanId, setCreatedLoanId] = useState<string | null>(null); // Track created loan ID
+    const autoSaveRef = useRef<AutoSaveHandle>(null);
+    const hasNavigatedAway = useRef(false); // Track if user has left the screen
 
-    // Validation error states
-    const [loanNameError, setLoanNameError] = useState(false);
-    const [loanAmountError, setLoanAmountError] = useState(false);
-    const [interestRateError, setInterestRateError] = useState(false);
-    const [termError, setTermError] = useState(false);
-    const [attempted, setAttempted] = useState(false); // Track if user has tried to save
+    // Clear form when user returns to page after creating a loan
+    useFocusEffect(
+        useCallback(() => {
+            // When screen comes into focus
+            if (hasNavigatedAway.current && createdLoanId) {
+                // Clear all form fields
+                setLoanName('');
+                setLoanAmount('');
+                setInterestRate('');
+                setTerm('');
+                setDate(new Date());
+                setShowAllPayments(false);
+                setCreatedLoanId(null);
+                hasNavigatedAway.current = false;
+            }
+            
+            // Return cleanup that sets the flag when leaving
+            return () => {
+                if (createdLoanId) {
+                    hasNavigatedAway.current = true;
+                }
+            };
+        }, [createdLoanId])
+    );
 
-    // Validation functions
-    const validateLoanName = (value: string) => {
-        if (attempted) {
-            setLoanNameError(!value || value.trim() === '');
+    // Validation helper
+    const isValidLoanData = () => {
+        const principal = parseFloat(loanAmount);
+        const annualRate = parseFloat(interestRate);
+        const termValue = parseFloat(term);
+        
+        return loanName.trim() !== '' && 
+               loanAmount.trim() !== '' && 
+               !isNaN(principal) && 
+               principal > 0 &&
+               interestRate.trim() !== '' && 
+               !isNaN(annualRate) && 
+               annualRate >= 0 &&
+               term.trim() !== '' && 
+               !isNaN(termValue) && 
+               termValue > 0;
+    };
+
+    // Individual field validation for highlighting
+    const isValidName = () => loanName.trim() !== '';
+    const isValidAmount = () => {
+        const amount = parseFloat(loanAmount);
+        return loanAmount.trim() !== '' && !isNaN(amount) && amount > 0;
+    };
+    const isValidRate = () => {
+        const rate = parseFloat(interestRate);
+        return interestRate.trim() !== '' && !isNaN(rate) && rate >= 0;
+    };
+    const isValidTerm = () => {
+        const termValue = parseFloat(term);
+        return term.trim() !== '' && !isNaN(termValue) && termValue > 0;
+    };
+
+    // Trigger auto-save
+    const triggerAutoSave = () => {
+        if (isValidLoanData() && autoSaveRef.current) {
+            autoSaveRef.current.trigger();
         }
     };
 
-    const validateLoanAmount = (value: string) => {
-        if (attempted) {
-            const amount = parseFloat(value);
-            setLoanAmountError(!value || isNaN(amount) || amount <= 0);
-        }
-    };
-
-    const validateInterestRate = (value: string) => {
-        if (attempted) {
-            const rate = parseFloat(value);
-            setInterestRateError(!value || isNaN(rate) || rate < 0);
-        }
-    };
-
-    const validateTerm = (value: string) => {
-        if (attempted) {
-            const termValue = parseFloat(value);
-            setTermError(!value || isNaN(termValue) || termValue <= 0);
-        }
-    };
-
-    // Wrapped setters with validation
+    // Wrapped setters with auto-save trigger
     const handleLoanNameChange = (value: string) => {
         setLoanName(value);
-        validateLoanName(value);
+        triggerAutoSave();
     };
 
     const handleLoanAmountChange = (value: string) => {
         setLoanAmount(value);
-        validateLoanAmount(value);
+        triggerAutoSave();
     };
 
     const handleInterestRateChange = (value: string) => {
         setInterestRate(value);
-        validateInterestRate(value);
+        triggerAutoSave();
     };
 
     const handleTermChange = (value: string) => {
         setTerm(value);
-        validateTerm(value);
+        triggerAutoSave();
     };
 
     // Handle date selection from date picker
@@ -96,6 +131,7 @@ export default function CreateLoanScreen() {
         // Update date if a valid date was selected
         if (selectedDate) {
             setDate(selectedDate);
+            triggerAutoSave();
         }
     };
 
@@ -139,51 +175,40 @@ export default function CreateLoanScreen() {
         startDate: date 
     });
 
-    // Save the loan to device storage and navigate to dashboard
+    // Auto-save loan to device storage
     const saveLoan = async () => {
-        const principal = parseFloat(loanAmount);
-        const annualRate = parseFloat(interestRate);
-        const termValue = parseFloat(term);
-
-        // Mark that save was attempted
-        setAttempted(true);
-
-        // Validate all required fields
-        const nameInvalid = !loanName || loanName.trim() === '';
-        const amountInvalid = !loanAmount || isNaN(principal) || principal <= 0;
-        const rateInvalid = !interestRate || isNaN(annualRate) || annualRate < 0;
-        const termInvalid = !term || isNaN(termValue) || termValue <= 0;
-
-        // Set error states
-        setLoanNameError(nameInvalid);
-        setLoanAmountError(amountInvalid);
-        setInterestRateError(rateInvalid);
-        setTermError(termInvalid);
-
-        // If any field is invalid, show alert and return
-        if (nameInvalid || amountInvalid || rateInvalid || termInvalid) {
-            Alert.alert('Missing Information', 'Please fill in all fields with valid values before saving.');
+        if (!isValidLoanData()) {
             return;
         }
 
-        // Create loan object with all details
-        const newLoan = {
-            id: Date.now().toString(), // Use timestamp as unique ID
-            name: loanName,
-            amount: principal,
-            interestRate: annualRate,
-            term: termValue,
-            termUnit,
-            startDate: getStartDate(),
-            monthlyPayment,
-            totalPayment,
-            createdAt: new Date().toISOString(),
-        };
+        const principal = parseFloat(loanAmount);
+        const annualRate = parseFloat(interestRate);
+        const termValue = parseFloat(term);
 
         try {
             // Get existing loans from storage
             const existingLoans = await AsyncStorage.getItem('loans');
             const loans = existingLoans ? JSON.parse(existingLoans) : [];
+            
+            // Determine loan ID - use existing if already created, otherwise create new
+            const loanId = createdLoanId || Date.now().toString();
+            
+            // Find if loan already exists
+            const existingLoanIndex = loans.findIndex((l: any) => l.id === loanId);
+            
+            // Create/update loan object with all details
+            const loanData = {
+                id: loanId,
+                name: loanName,
+                amount: principal,
+                interestRate: annualRate,
+                term: termValue,
+                termUnit,
+                startDate: getStartDate(),
+                monthlyPayment,
+                totalPayment,
+                createdAt: existingLoanIndex !== -1 ? loans[existingLoanIndex].createdAt : new Date().toISOString(),
+            };
             
             // Schedule notifications if enabled
             const notificationPrefs = await getNotificationPreferences();
@@ -192,7 +217,7 @@ export default function CreateLoanScreen() {
             if (notificationPrefs.enabled) {
                 const termInMonths = convertTermToMonths(termValue, termUnit);
                 scheduledNotificationIds = await schedulePaymentReminders(
-                    newLoan.id,
+                    loanId,
                     loanName,
                     monthlyPayment,
                     getStartDate(),
@@ -203,34 +228,25 @@ export default function CreateLoanScreen() {
             
             // Add notification IDs to loan object
             const loanWithNotifications = {
-                ...newLoan,
+                ...loanData,
                 scheduledNotificationIds
             };
             
-            // Add new loan to array
-            loans.push(loanWithNotifications);
+            if (existingLoanIndex !== -1) {
+                // Update existing loan
+                loans[existingLoanIndex] = loanWithNotifications;
+            } else {
+                // Add new loan to array
+                loans.push(loanWithNotifications);
+                // Store the loan ID so subsequent saves update instead of create
+                setCreatedLoanId(loanId);
+            }
+            
             // Save back to storage
             await AsyncStorage.setItem('loans', JSON.stringify(loans));
-            
-            // Clear the form fields
-            setLoanName('');
-            setLoanAmount('');
-            setInterestRate('');
-            setTerm('');
-            setDate(new Date());
-            setShowAllPayments(false);
-            
-            // Clear validation errors
-            setAttempted(false);
-            setLoanNameError(false);
-            setLoanAmountError(false);
-            setInterestRateError(false);
-            setTermError(false);
-            
-            // Navigate back to dashboard
-            router.push('/(tabs)');
         } catch (error) {
-            Alert.alert('Error', 'Failed to save loan. Please try again.');
+            console.error('Error saving loan:', error);
+            throw error;
         }
     };
 
@@ -243,48 +259,58 @@ export default function CreateLoanScreen() {
             Calculate your loan payments
         </Text>
         
+        <AutoSaveIndicator ref={autoSaveRef} onSave={saveLoan} />
+        {!isValidLoanData() && (
+            <View style={styles.errorIndicator}>
+                <Text style={styles.errorText}>⚠️ Fill in all fields</Text>
+            </View>
+        )}
+
         {/* Loan name input */}
-        <InputField
-            label="Loan Name"
-            value={loanName}
-            onChangeText={handleLoanNameChange}
-            placeholder="e.g., Car Loan, Mortgage, Student Loan"
-            error={loanNameError}
-            errorMessage="Please enter a loan name"
-        />
+        <View style={!isValidName() && loanName !== '' ? styles.fieldError : undefined}>
+            <InputField
+                label="Loan Name"
+                value={loanName}
+                onChangeText={handleLoanNameChange}
+                placeholder="e.g., Car Loan, Mortgage, Student Loan"
+            />
+        </View>
         
         {/* Loan amount input */}
-        <InputField
-            label="Loan Amount"
-            value={loanAmount}
-            onChangeText={handleLoanAmountChange}
-            placeholder="Enter loan amount"
-            keyboardType="numeric"
-            formatNumber={true}
-            error={loanAmountError}
-            errorMessage="Please enter a valid amount greater than 0"
-        />
+        <View style={!isValidAmount() && loanAmount !== '' ? styles.fieldError : undefined}>
+            <InputField
+                label="Loan Amount"
+                value={loanAmount}
+                onChangeText={handleLoanAmountChange}
+                placeholder="Enter loan amount"
+                keyboardType="numeric"
+                formatNumber={true}
+            />
+        </View>
 
         {/* Interest rate input */}
-        <InputField
-            label="Interest Rate (%)"
-            value={interestRate}
-            onChangeText={handleInterestRateChange}
-            placeholder="Enter interest rate"
-            keyboardType="decimal-pad"
-            error={interestRateError}
-            errorMessage="Please enter a valid interest rate"
-        />
+        <View style={!isValidRate() && interestRate !== '' ? styles.fieldError : undefined}>
+            <InputField
+                label="Interest Rate (%)"
+                value={interestRate}
+                onChangeText={handleInterestRateChange}
+                placeholder="Enter interest rate"
+                keyboardType="decimal-pad"
+            />
+        </View>
 
         {/* Term input with months/years toggle */}
-        <TermSelector
+        <View style={!isValidTerm() && term !== '' ? styles.fieldError : undefined}>
+            <TermSelector
             term={term}
             termUnit={termUnit}
             onTermChange={handleTermChange}
-            onTermUnitChange={setTermUnit}
-            error={termError}
-            errorMessage="Please enter a valid loan term"
+            onTermUnitChange={(unit) => {
+                setTermUnit(unit);
+                triggerAutoSave();
+            }}
         />
+        </View>
 
         {/* Start date picker */}
         <View>
@@ -345,7 +371,7 @@ export default function CreateLoanScreen() {
                 title="Principal Balance Over Time"
                 data={paymentSchedule.map(p => ({ value: p.balance }))}
                 color={theme.colors.primary}
-                yAxisFormatter={(v) => `$${parseFloat(loanAmount) ? (v).toLocaleString() : '0'}`}
+                yAxisFormatter={(v) => formatCurrency(v, { code: 'USD', symbol: '$', name: 'US Dollar', position: 'before' }, 0)}
             />
         )}
 
@@ -414,19 +440,12 @@ export default function CreateLoanScreen() {
 
             </ScrollView>
         </TouchableWithoutFeedback>
-        
-        {/* Fixed button at bottom */}
-        <View style={styles.bottomButtonContainer}>
-            <TouchableOpacity style={styles.createButton} onPress={saveLoan}>
-                <Text style={styles.createButtonText}>Create Loan</Text>
-            </TouchableOpacity>
-        </View>
     </View>;
 }
 
 // Styles for the create loan screen
 const styles = StyleSheet.create({
-    // Wrapper to hold scrollview and fixed button
+    // Wrapper to hold scrollview
     wrapper: {
         flex: 1,
         backgroundColor: theme.colors.surface,
@@ -443,26 +462,24 @@ const styles = StyleSheet.create({
         marginBottom: theme.spacing.xxl,
         color: theme.colors.textPrimary,
     },
-    // Bottom button container
-    bottomButtonContainer: {
-        padding: theme.spacing.xl,
-        paddingBottom: theme.spacing.xxl,
-        backgroundColor: theme.colors.surface,
-        borderTopWidth: 1,
-        borderTopColor: theme.colors.gray200,
-        ...theme.shadows.md,
+    // Error indicator
+    errorIndicator: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: theme.spacing.sm,
+        minHeight: 30,
     },
-    // Primary "Create Loan" button
-    createButton: {
-        backgroundColor: theme.colors.primary,
-        padding: theme.spacing.lg,
-        borderRadius: theme.borderRadius.lg,
-        alignItems: "center",
+    errorText: {
+        color: theme.colors.error,
+        fontSize: theme.fontSize.sm,
+        fontWeight: theme.fontWeight.semibold,
     },
-    createButtonText: {
-        color: theme.colors.textInverse,
-        fontSize: theme.fontSize.lg,
-        fontWeight: theme.fontWeight.bold,
+    fieldError: {
+        borderWidth: 2,
+        borderColor: theme.colors.error,
+        borderRadius: theme.borderRadius.md,
+        padding: 2,
+        marginBottom: theme.spacing.sm,
     },
     // Container for payment schedule section
     paymentDetailsContainer: {

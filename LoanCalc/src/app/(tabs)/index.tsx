@@ -9,6 +9,8 @@ import { theme } from '../../constants/theme';
 import PieChart from '../../components/PieChart';
 import OnboardingSlider from '../../components/OnboardingSlider';
 import { cancelLoanNotifications } from '../../utils/notificationUtils';
+import { getCurrencyPreference, Currency } from '../../utils/storage';
+import { formatCurrency } from '../../utils/currencyUtils';
 
 // Only import PDF generation on native platforms
 const generateRobustLoanPDF = Platform.OS !== 'web' 
@@ -36,6 +38,7 @@ export default function DashboardScreen() {
     const [expandedLoans, setExpandedLoans] = useState<Set<string>>(new Set());
     const [showOnboarding, setShowOnboarding] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
+    const [currency, setCurrency] = useState<Currency>({ code: 'USD', symbol: '$', name: 'US Dollar', position: 'before' });
     const router = useRouter();
 
     // Function to load loans from device storage
@@ -54,8 +57,14 @@ export default function DashboardScreen() {
     useFocusEffect(
         useCallback(() => {
             loadLoans();
+            loadCurrency();
         }, [])
     );
+
+    const loadCurrency = async () => {
+        const curr = await getCurrencyPreference();
+        setCurrency(curr);
+    };
 
     // Function to delete a loan by its ID
     const deleteLoan = async (id: string) => {
@@ -137,7 +146,7 @@ export default function DashboardScreen() {
                                 };
                                 
                                 // Generate PDF using robust pdf-lib
-                                const pdfBytes = await generateRobustLoanPDF(portfolioData);
+                                const pdfBytes = await generateRobustLoanPDF(portfolioData, currency);
                                 
                                 // Save to device
                                 const filename = 'loan_portfolio_summary.pdf';
@@ -284,7 +293,7 @@ export default function DashboardScreen() {
             <View style={styles.summaryContainer}>
                 <View style={styles.summaryCard}>
                     <Text style={styles.summaryLabel}>Total Borrowed</Text>
-                    <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>${totalBorrowed.toLocaleString()}</Text>
+                    <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{formatCurrency(totalBorrowed, currency, 0)}</Text>
                     <View style={styles.pieChartWrapper}>
                         <PieChart data={totalBorrowedData} size={120} strokeWidth={15} />
                         <View style={styles.legendContainer}>
@@ -299,7 +308,7 @@ export default function DashboardScreen() {
                 </View>
                 <View style={styles.summaryCard}>
                     <Text style={styles.summaryLabel}>Remaining</Text>
-                    <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>${totalRemaining.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</Text>
+                    <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{formatCurrency(totalRemaining, currency)}</Text>
                     <View style={styles.pieChartWrapper}>
                         <PieChart data={remainingData} size={120} strokeWidth={15} />
                         <View style={styles.legendContainer}>
@@ -314,7 +323,7 @@ export default function DashboardScreen() {
                 </View>
                 <View style={styles.summaryCard}>
                     <Text style={styles.summaryLabel}>Monthly Payment</Text>
-                    <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>${totalMonthlyPayment.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</Text>
+                    <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{formatCurrency(totalMonthlyPayment, currency)}</Text>
                     <View style={styles.pieChartWrapper}>
                         <PieChart data={monthlyPaymentData} size={120} strokeWidth={15} />
                         <View style={styles.legendContainer}>
@@ -388,10 +397,10 @@ export default function DashboardScreen() {
                             <View style={styles.loanHeader}>
                                 <View style={styles.loanHeaderLeft}>
                                     {loan.name && <Text style={styles.loanName}>{loan.name}</Text>}
-                                    <Text style={styles.loanAmount}>${loan.amount.toLocaleString()}</Text>
+                                    <Text style={styles.loanAmount}>{formatCurrency(loan.amount, currency, 0)}</Text>
                                     {!isExpanded && (
                                         <Text style={styles.loanSubtitle}>
-                                            ${loan.monthlyPayment.toFixed(2)}/month • {loan.term} {loan.termUnit}
+                                            {formatCurrency(loan.monthlyPayment, currency)}/month • {loan.term} {loan.termUnit}
                                         </Text>
                                     )}
                                 </View>
@@ -432,7 +441,7 @@ export default function DashboardScreen() {
                                         {/* Monthly payment highlight */}
                                         <View style={styles.paymentHighlight}>
                                             <Text style={styles.paymentLabel}>Monthly Payment</Text>
-                                            <Text style={styles.paymentValue}>${loan.monthlyPayment.toFixed(2)}</Text>
+                                            <Text style={styles.paymentValue}>{formatCurrency(loan.monthlyPayment, currency)}</Text>
                                         </View>
                                         
                                         {/* Loan details section */}
@@ -443,11 +452,11 @@ export default function DashboardScreen() {
                                             </View>
                                             <View style={styles.detailRow}>
                                                 <Text style={styles.detailLabel}>Remaining Balance</Text>
-                                                <Text style={[styles.detailValue, { color: theme.colors.primary }]}>${calculateRemainingPrincipal(loan).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</Text>
+                                                <Text style={[styles.detailValue, { color: theme.colors.primary }]}>{formatCurrency(calculateRemainingPrincipal(loan), currency, 0)}</Text>
                                             </View>
                                             <View style={styles.detailRow}>
                                                 <Text style={styles.detailLabel}>Total Payment</Text>
-                                                <Text style={styles.detailValue}>${loan.totalPayment.toLocaleString()}</Text>
+                                                <Text style={styles.detailValue}>{formatCurrency(loan.totalPayment, currency, 0)}</Text>
                                             </View>
                                         </View>
                                         
@@ -531,6 +540,19 @@ export default function DashboardScreen() {
                             <View style={styles.menuTextContainer}>
                                 <Text style={styles.menuText}>Notifications</Text>
                                 <Text style={styles.menuSubtext}>Manage payment reminders</Text>
+                            </View>
+                        </TouchableOpacity>
+                    </Link>
+                    
+                    <Link href="/(tabs)/currencySettings" asChild>
+                        <TouchableOpacity 
+                            style={styles.menuItem}
+                            onPress={() => setShowSettings(false)}
+                        >
+                            <Text style={styles.menuIcon}>💱</Text>
+                            <View style={styles.menuTextContainer}>
+                                <Text style={styles.menuText}>Currency</Text>
+                                <Text style={styles.menuSubtext}>Change display currency</Text>
                             </View>
                         </TouchableOpacity>
                     </Link>

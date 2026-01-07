@@ -1,5 +1,8 @@
+import { useState, useEffect } from "react";
 import { Text, View, StyleSheet } from "react-native";
 import { theme } from "../constants/theme";
+import { getCurrencyPreference, Currency } from "../utils/storage";
+import { formatCurrency } from "../utils/currencyUtils";
 
 type PaymentDetailCardProps = {
     paymentNumber: number;
@@ -22,6 +25,16 @@ export default function PaymentDetailCard({
     interestRate,
     rateChanged
 }: PaymentDetailCardProps) {
+    const [currency, setCurrency] = useState<Currency>({ code: 'USD', symbol: '$', name: 'US Dollar', position: 'before' });
+
+    useEffect(() => {
+        loadCurrency();
+    }, []);
+
+    const loadCurrency = async () => {
+        const curr = await getCurrencyPreference();
+        setCurrency(curr);
+    };
     return (
         <View style={styles.card}>
             <View style={styles.header}>
@@ -38,15 +51,15 @@ export default function PaymentDetailCard({
             <View style={styles.details}>
                 <View style={styles.row}>
                     <Text style={styles.label}>Payment</Text>
-                    <Text style={styles.value}>${payment.toFixed(2)}</Text>
+                    <Text style={styles.value}>{formatCurrency(payment, currency)}</Text>
                 </View>
                 <View style={styles.row}>
                     <Text style={styles.label}>Principal</Text>
-                    <Text style={styles.value}>${principal.toFixed(2)}</Text>
+                    <Text style={styles.value}>{formatCurrency(principal, currency)}</Text>
                 </View>
                 <View style={styles.row}>
                     <Text style={styles.label}>Interest</Text>
-                    <Text style={styles.value}>${interest.toFixed(2)}</Text>
+                    <Text style={styles.value}>{formatCurrency(interest, currency)}</Text>
                 </View>
                 {interestRate !== undefined && (
                     <View style={styles.row}>
@@ -56,7 +69,7 @@ export default function PaymentDetailCard({
                 )}
                 <View style={styles.row}>
                     <Text style={styles.label}>Remaining Balance</Text>
-                    <Text style={[styles.value, styles.balance]}>${balance.toFixed(2)}</Text>
+                    <Text style={[styles.value, styles.balance]}>{formatCurrency(balance, currency)}</Text>
                 </View>
             </View>
         </View>

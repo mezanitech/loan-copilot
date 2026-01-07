@@ -1,4 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { Currency } from './storage';
+import { formatCurrency } from './currencyUtils';
 
 export interface LoanData {
   loanId: string;
@@ -27,7 +29,7 @@ export interface LoanData {
   }[];
 }
 
-export async function generateRobustLoanPDF(loanData: LoanData, startDate?: Date): Promise<Uint8Array> {
+export async function generateRobustLoanPDF(loanData: LoanData, currency: Currency, startDate?: Date): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -81,9 +83,9 @@ export async function generateRobustLoanPDF(loanData: LoanData, startDate?: Date
     // Loan info - Conditional display for portfolio
     let infoText;
     if (isPortfolio) {
-      infoText = `${loanData.name} - Total: $${loanData.amount.toLocaleString()} - Monthly: $${loanData.monthlyPayment.toLocaleString()}`;
+      infoText = `${loanData.name} - Total: ${formatCurrency(loanData.amount, currency, 0)} - Monthly: ${formatCurrency(loanData.monthlyPayment, currency, 0)}`;
     } else {
-      infoText = `${loanData.name} - $${loanData.amount.toLocaleString()} - ${loanData.interestRate}% - ${Math.floor(loanData.termInMonths/12)}y ${loanData.termInMonths%12}m`;
+      infoText = `${loanData.name} - ${formatCurrency(loanData.amount, currency, 0)} - ${loanData.interestRate}% - ${Math.floor(loanData.termInMonths/12)}y ${loanData.termInMonths%12}m`;
     }
     
     page.drawText(infoText, {
@@ -184,7 +186,7 @@ export async function generateRobustLoanPDF(loanData: LoanData, startDate?: Date
     
     const loanDetailLines = [
       `Loan Name: ${loanData.name}`,
-      `Loan Amount: $${loanData.amount.toLocaleString()}`,
+      `Loan Amount: ${formatCurrency(loanData.amount, currency, 0)}`,
       `Interest Rate: ${loanData.interestRate}%`,
       `Loan Term: ${Math.floor(loanData.termInMonths/12)} years ${loanData.termInMonths%12} months`
     ];
@@ -223,9 +225,9 @@ export async function generateRobustLoanPDF(loanData: LoanData, startDate?: Date
     const payoffDate = loanData.payments[loanData.payments.length - 1]?.date || 'N/A';
     
     const paymentSummaryLines = [
-      `Monthly Payment: $${loanData.monthlyPayment.toLocaleString()}`,
-      `Total Interest: $${totalInterest.toLocaleString()}`,
-      `Total Cost: $${loanData.totalPayment.toLocaleString()}`,
+      `Monthly Payment: ${formatCurrency(loanData.monthlyPayment, currency, 0)}`,
+      `Total Interest: ${formatCurrency(totalInterest, currency, 0)}`,
+      `Total Cost: ${formatCurrency(loanData.totalPayment, currency, 0)}`,
       `Payoff Date: ${payoffDate} (${loanData.payments.length} payments)`
     ];
     
@@ -266,7 +268,7 @@ export async function generateRobustLoanPDF(loanData: LoanData, startDate?: Date
         : 'N/A';
       
       const savingsLines = [
-        `Interest Saved: $${loanData.interestSaved.toLocaleString()}`,
+        `Interest Saved: ${formatCurrency(loanData.interestSaved, currency, 0)}`,
         `Time Saved: ${timeSavedText}`
       ];
       
@@ -330,7 +332,7 @@ export async function generateRobustLoanPDF(loanData: LoanData, startDate?: Date
           }
         }
         
-        const displayText = `${nameText}$${ep.amount.toLocaleString()} - ${typeText}${dateText}`;
+        const displayText = `${nameText}${formatCurrency(ep.amount, currency, 0)} - ${typeText}${dateText}`;
         
         currentPage.drawText(displayText, {
           x: margin + 15, y: currentY - (index * 18),
@@ -450,14 +452,14 @@ export async function generateRobustLoanPDF(loanData: LoanData, startDate?: Date
     const rowData = isPortfolio ? [
       (payment.number).toString(),
       payment.date, // Contains loan details for portfolio
-      `$${payment.principal.toLocaleString()}`,
-      `$${payment.interest.toLocaleString()}`,
-      `$${payment.balance.toLocaleString()}`
+      formatCurrency(payment.principal, currency, 0),
+      formatCurrency(payment.interest, currency, 0),
+      formatCurrency(payment.balance, currency, 0)
     ] : [
       (payment.number).toString(),
-      `$${payment.principal.toFixed(2)}`,
-      `$${payment.interest.toFixed(2)}`,
-      `$${payment.balance.toFixed(2)}`,
+      formatCurrency(payment.principal, currency),
+      formatCurrency(payment.interest, currency),
+      formatCurrency(payment.balance, currency),
       payment.date
     ];
     
@@ -520,9 +522,9 @@ export async function generateRobustLoanPDF(loanData: LoanData, startDate?: Date
     
     const summaryLines = [
       `Total Loans: ${loanData.payments.length}`,
-      `Total Principal: $${totalPrincipal.toLocaleString()}`,
-      `Total Interest (Lifetime): $${totalInterest.toLocaleString()}`,
-      `Combined Monthly Payment: $${loanData.monthlyPayment.toLocaleString()}`
+      `Total Principal: ${formatCurrency(totalPrincipal, currency, 0)}`,
+      `Total Interest (Lifetime): ${formatCurrency(totalInterest, currency, 0)}`,
+      `Combined Monthly Payment: ${formatCurrency(loanData.monthlyPayment, currency, 0)}`
     ];
     
     summaryLines.forEach((line, index) => {

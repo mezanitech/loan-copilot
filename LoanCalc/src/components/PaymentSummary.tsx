@@ -1,5 +1,9 @@
+import { useState, useEffect, useCallback } from "react";
 import { Text, View, StyleSheet } from "react-native";
+import { useFocusEffect } from "expo-router";
 import { theme } from "../constants/theme";
+import { getCurrencyPreference, Currency } from "../utils/storage";
+import { formatCurrency } from "../utils/currencyUtils";
 
 type PaymentSummaryProps = {
     monthlyPayment: number;
@@ -9,7 +13,19 @@ type PaymentSummaryProps = {
 };
 
 export default function PaymentSummary({ monthlyPayment, totalPayment, loanAmount, remainingBalance }: PaymentSummaryProps) {
+    const [currency, setCurrency] = useState<Currency>({ code: 'USD', symbol: '$', name: 'US Dollar', position: 'before' });
     const totalInterest = totalPayment - parseFloat(loanAmount || "0");
+    
+    useFocusEffect(
+        useCallback(() => {
+            loadCurrency();
+        }, [])
+    );
+
+    const loadCurrency = async () => {
+        const curr = await getCurrencyPreference();
+        setCurrency(curr);
+    };
     
     return (
         <View style={styles.container}>
@@ -19,7 +35,7 @@ export default function PaymentSummary({ monthlyPayment, totalPayment, loanAmoun
             <View style={styles.primaryRow}>
                 <View>
                     <Text style={styles.primaryLabel}>📆 Monthly Payment</Text>
-                    <Text style={styles.primaryValue}>${monthlyPayment.toFixed(2)}</Text>
+                    <Text style={styles.primaryValue}>{formatCurrency(monthlyPayment, currency)}</Text>
                 </View>
             </View>
             
@@ -27,17 +43,17 @@ export default function PaymentSummary({ monthlyPayment, totalPayment, loanAmoun
             <View style={styles.detailsContainer}>
                 <View style={styles.row}>
                     <Text style={styles.label}>💰 Total Amount</Text>
-                    <Text style={styles.value}>${totalPayment.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</Text>
+                    <Text style={styles.value}>{formatCurrency(totalPayment, currency)}</Text>
                 </View>
                 {remainingBalance !== undefined && (
                     <View style={styles.row}>
                         <Text style={styles.label}>💳 Remaining Balance</Text>
-                        <Text style={[styles.value, { color: theme.colors.primary }]}>${remainingBalance.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</Text>
+                        <Text style={[styles.value, { color: theme.colors.primary }]}>{formatCurrency(remainingBalance, currency, 0)}</Text>
                     </View>
                 )}
                 <View style={styles.row}>
                     <Text style={styles.label}>📈 Total Interest</Text>
-                    <Text style={[styles.value, styles.interestValue]}>${totalInterest.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</Text>
+                    <Text style={[styles.value, styles.interestValue]}>{formatCurrency(totalInterest, currency)}</Text>
                 </View>
             </View>
         </View>

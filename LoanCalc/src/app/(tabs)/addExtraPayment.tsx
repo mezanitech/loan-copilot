@@ -6,6 +6,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { theme } from '../../constants/theme';
 import InputField from "../../components/InputField";
 import EarlyPaymentList, { EarlyPaymentListRef, isValidEarlyPayment } from "../../components/EarlyPaymentList";
+import { getCurrencyPreference, Currency } from "../../utils/storage";
+import { formatCurrency } from "../../utils/currencyUtils";
 
 type Loan = {
     id: string;
@@ -35,6 +37,7 @@ export default function AddExtraPaymentScreen() {
     const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null);
     const [existingPayments, setExistingPayments] = useState<EarlyPayment[]>([]);
     const earlyPaymentListRef = useRef<EarlyPaymentListRef>(null);
+    const [currency, setCurrency] = useState<Currency>({ code: 'USD', symbol: '$', name: 'US Dollar', position: 'before' });
     
     // Payment fields
     const [paymentName, setPaymentName] = useState("");
@@ -84,8 +87,14 @@ export default function AddExtraPaymentScreen() {
     useFocusEffect(
         useCallback(() => {
             loadLoans();
+            loadCurrency();
         }, [])
     );
+
+    const loadCurrency = async () => {
+        const curr = await getCurrencyPreference();
+        setCurrency(curr);
+    };
 
     // Toggle loan selection (single select only)
     const toggleLoanSelection = (loanId: string) => {
@@ -379,7 +388,7 @@ export default function AddExtraPaymentScreen() {
                                     <View style={styles.strategyRecommendation}>
                                         <Text style={styles.strategyRecommendText}>Recommended loan:</Text>
                                         <Text style={styles.strategyLoanName}>
-                                            {smallestBalanceLoan.name || 'Unnamed Loan'} (${remainingBalance.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})} remaining)
+                                            {smallestBalanceLoan.name || 'Unnamed Loan'} ({formatCurrency(remainingBalance, currency, 0)} remaining)
                                         </Text>
                                     </View>
                                 );
@@ -415,7 +424,7 @@ export default function AddExtraPaymentScreen() {
                                 <View style={styles.loanItemContent}>
                                     <Text style={styles.loanItemName}>{loan.name || 'Unnamed Loan'}</Text>
                                     <Text style={styles.loanItemDetails}>
-                                        ${loan.amount.toLocaleString()} @ {loan.interestRate}%
+                                        {formatCurrency(loan.amount, currency, 0)} @ {loan.interestRate}%
                                     </Text>
                                 </View>
                                 <View style={[

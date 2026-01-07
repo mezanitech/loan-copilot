@@ -1,5 +1,6 @@
 import { Text, View, StyleSheet } from "react-native";
 import { theme } from "../constants/theme";
+import { formatCurrency } from "../utils/currencyUtils";
 
 type EarlyPayment = {
     id: string;
@@ -24,7 +25,7 @@ export default function DualLineChart({
     earlyPayments = [],
     legendLabels = { principal: "Principal", interest: "Interest" },
     colors = { principal: theme.colors.success, interest: theme.colors.error },
-    yAxisFormatter = (v) => `$${v.toFixed(0)}`
+    yAxisFormatter = (v) => formatCurrency(v, { code: 'USD', symbol: '$', name: 'US Dollar', position: 'before' }, 0)
 }: DualLineChartProps) {
     // Calculate maxValue excluding months with early payments to avoid scale distortion
     const calculatedMax = Math.max(...data.map((d, index) => {

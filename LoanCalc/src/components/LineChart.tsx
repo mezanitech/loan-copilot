@@ -1,6 +1,7 @@
 // Import React Native UI components
 import { Text, View, StyleSheet } from "react-native";
 import { theme } from "../constants/theme";
+import { formatCurrency } from "../utils/currencyUtils";
 
 // Define the props that LineChart component accepts
 type LineChartProps = {
@@ -16,7 +17,7 @@ export default function LineChart({
     title, 
     data, 
     color = theme.colors.primary, // Default to theme primary color
-    yAxisFormatter = (v) => `$${v.toFixed(0)}`, // Default: format as dollar amount
+    yAxisFormatter = (v) => formatCurrency(v, { code: 'USD', symbol: '$', name: 'US Dollar', position: 'before' }, 0), // Default: format as dollar amount
     showLegend = false,
     legendItems = []
 }: LineChartProps) {

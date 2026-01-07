@@ -4,11 +4,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useGlobalSearchParams, router } from 'expo-router';
 import { theme } from '../../../constants/theme';
 import EarlyPaymentList, { EarlyPayment, EarlyPaymentListRef } from "../../../components/EarlyPaymentList";
+import { AutoSaveIndicator, AutoSaveHandle } from "../../../components/AutoSaveIndicator";
 
 export default function PaymentsScreen() {
     const params = useGlobalSearchParams();
     const loanId = params.loanId as string;
     const earlyPaymentListRef = useRef<EarlyPaymentListRef>(null);
+    const autoSaveRef = useRef<AutoSaveHandle>(null);
     
     const [earlyPayments, setEarlyPayments] = useState<EarlyPayment[]>([]);
     const [startDate, setStartDate] = useState(new Date());
@@ -46,7 +48,7 @@ export default function PaymentsScreen() {
         }
     };
 
-    // Save early payments to AsyncStorage automatically
+    // Save early payments to AsyncStorage
     const savePayments = async (payments: EarlyPayment[]) => {
         try {
             const loansData = await AsyncStorage.getItem('loans');
@@ -59,17 +61,20 @@ export default function PaymentsScreen() {
             }
         } catch (error) {
             console.error('Error saving payments:', error);
+            throw error;
         }
     };
 
-    // Handle payment changes and auto-save
+    // Handle payment changes and trigger auto-save
     const handlePaymentsChange = (payments: EarlyPayment[]) => {
         setEarlyPayments(payments);
-        savePayments(payments);
+        autoSaveRef.current?.trigger();
     };
 
     return (
         <ScrollView style={styles.container}>
+            <AutoSaveIndicator ref={autoSaveRef} onSave={() => savePayments(earlyPayments)} />
+
             <Text style={styles.description}>
                 Add extra payments to pay off your loan faster and save on interest!
             </Text>

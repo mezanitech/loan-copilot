@@ -17,9 +17,9 @@ export default function DatePicker({ label, value, onChangeDate }: DatePickerPro
     const month = parts[1] || '01';
     const day = parts[2] || '01';
 
-    // Generate array of years (current year + 10 years into future)
+    // Generate array of years (allow past 20 years and future 20 years for flexibility)
     const currentYear = new Date().getFullYear();
-    const years = Array.from({ length: 11 }, (_, i) => currentYear + i);
+    const years = Array.from({ length: 41 }, (_, i) => currentYear - 20 + i);
 
     // Month names for display
     const months = [

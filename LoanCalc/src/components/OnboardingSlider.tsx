@@ -16,7 +16,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Asset } from 'expo-asset';
 import { theme } from '../constants/theme';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const IS_SMALL_DEVICE = SCREEN_HEIGHT < 700;
 
 interface OnboardingSliderProps {
   visible: boolean;
@@ -266,35 +267,36 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 40,
+    paddingVertical: IS_SMALL_DEVICE ? 20 : 40,
   },
   iconContainer: {
-    marginBottom: 40,
+    marginBottom: IS_SMALL_DEVICE ? 20 : 40,
   },
   logoContainer: {
-    marginBottom: 40,
+    marginBottom: IS_SMALL_DEVICE ? 20 : 40,
   },
   logoImage: {
-    width: 140,
-    height: 140,
+    width: IS_SMALL_DEVICE ? 100 : 140,
+    height: IS_SMALL_DEVICE ? 100 : 140,
   },
   imageFrame: {
     backgroundColor: theme.colors.surface,
     borderRadius: theme.borderRadius.lg,
     padding: 8,
-    marginBottom: 30,
+    marginBottom: IS_SMALL_DEVICE ? 15 : 30,
     ...theme.shadows.md,
     borderWidth: 1,
     borderColor: theme.colors.gray200,
   },
   slideImage: {
     width: SCREEN_WIDTH * 0.75,
-    height: SCREEN_WIDTH * 1.15,
+    height: IS_SMALL_DEVICE ? SCREEN_WIDTH * 0.95 : SCREEN_WIDTH * 1.15,
     borderRadius: 12,
   },
   dualImageContainer: {
     flexDirection: 'row',
     gap: 12,
-    marginBottom: 30,
+    marginBottom: IS_SMALL_DEVICE ? 15 : 30,
   },
   dualImageFrame: {
     backgroundColor: theme.colors.surface,
@@ -306,21 +308,21 @@ const styles = StyleSheet.create({
   },
   dualSlideImage: {
     width: SCREEN_WIDTH * 0.35,
-    height: SCREEN_WIDTH * 0.75,
+    height: IS_SMALL_DEVICE ? SCREEN_WIDTH * 0.65 : SCREEN_WIDTH * 0.75,
     borderRadius: 8,
   },
   title: {
-    fontSize: theme.fontSize.xxxl,
+    fontSize: IS_SMALL_DEVICE ? theme.fontSize.xxl : theme.fontSize.xxxl,
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.textPrimary,
-    marginBottom: theme.spacing.xl,
+    marginBottom: IS_SMALL_DEVICE ? theme.spacing.md : theme.spacing.xl,
     textAlign: 'center',
   },
   description: {
-    fontSize: theme.fontSize.base,
+    fontSize: IS_SMALL_DEVICE ? theme.fontSize.sm : theme.fontSize.base,
     color: theme.colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: IS_SMALL_DEVICE ? 20 : 24,
   },
   pagination: {
     flexDirection: 'row',
