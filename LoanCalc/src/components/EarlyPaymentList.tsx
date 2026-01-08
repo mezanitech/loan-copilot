@@ -1,7 +1,7 @@
-import { View, Text, StyleSheet, TouchableOpacity, Platform, Modal } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { useState, forwardRef, useImperativeHandle } from "react";
-import DateTimePicker from '@react-native-community/datetimepicker';
 import InputField from "./InputField";
+import DatePicker from "./DatePicker";
 import { theme } from "../constants/theme";
 
 export type EarlyPayment = {
@@ -99,12 +99,6 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
     };
 
     const handleMonthChange = (event: any, selectedDate: Date | undefined, paymentId: string) => {
-        // On Android, dismiss event is sent when user cancels
-        if (Platform.OS === 'android' && event.type === 'dismissed') {
-            setActiveMonthPicker(null);
-            return;
-        }
-        
         if (selectedDate) {
             // Calculate the payment month number based on loan start date
             const yearDiff = selectedDate.getFullYear() - loanStartDate.getFullYear();
@@ -114,10 +108,7 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
             // Restrict to valid payment months (1 to loanTermInMonths)
             if (totalMonthDiff >= 1 && totalMonthDiff <= loanTermInMonths) {
                 updatePayment(paymentId, "month", totalMonthDiff.toString());
-                // Close picker on Android after selection
-                if (Platform.OS === 'android') {
-                    setActiveMonthPicker(null);
-                }
+                setActiveMonthPicker(null);
             }
         }
     };
@@ -128,7 +119,7 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
         if (isNaN(paymentMonth) || paymentMonth < 1) return "Select Month";
         
         // Calculate the actual date from payment month and loan start date
-        const actualDate = new Date(loanStartDate);
+        const actualDate = new Date(loanStartDate.getTime()); // Proper clone
         actualDate.setMonth(actualDate.getMonth() + paymentMonth - 1);
         
         const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -141,20 +132,20 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
     const getDateForMonth = (monthStr: string): Date => {
         const paymentMonth = parseInt(monthStr) || 1;
         // Calculate actual date from loan start date and payment month
-        const actualDate = new Date(loanStartDate);
+        const actualDate = new Date(loanStartDate.getTime()); // Proper clone
         actualDate.setMonth(actualDate.getMonth() + paymentMonth - 1);
         return actualDate;
     };
 
     const getMinDate = (): Date => {
         // First payment date (one month after loan start)
-        const minDate = new Date(loanStartDate);
+        const minDate = new Date(loanStartDate.getTime()); // Proper clone
         return minDate;
     };
 
     const getMaxDate = (): Date => {
         // Last payment date
-        const maxDate = new Date(loanStartDate);
+        const maxDate = new Date(loanStartDate.getTime()); // Proper clone
         maxDate.setMonth(maxDate.getMonth() + loanTermInMonths - 1);
         return maxDate;
     };
@@ -259,35 +250,12 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
                                 <Text style={styles.monthPickerText}>{getMonthDisplay(payment.month)}</Text>
                             </TouchableOpacity>
                             {activeMonthPicker === payment.id && (
-                                <Modal
+                                <DatePicker
                                     visible={true}
-                                    transparent={true}
-                                    animationType="fade"
-                                    onRequestClose={() => setActiveMonthPicker(null)}
-                                >
-                                    <TouchableOpacity 
-                                        style={styles.modalOverlay}
-                                        activeOpacity={1}
-                                        onPress={() => setActiveMonthPicker(null)}
-                                    >
-                                        <View style={styles.datePickerContainer}>
-                                            <DateTimePicker
-                                                value={getDateForMonth(payment.month)}
-                                                mode="date"
-                                                display="spinner"
-                                                onChange={(event, date) => handleMonthChange(event, date, payment.id)}
-                                                textColor={theme.colors.textPrimary}
-                                                themeVariant="light"
-                                            />
-                                            <TouchableOpacity 
-                                                style={styles.closeButton}
-                                                onPress={() => setActiveMonthPicker(null)}
-                                            >
-                                                <Text style={styles.closeButtonText}>Done</Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                    </TouchableOpacity>
-                                </Modal>
+                                    value={getDateForMonth(payment.month)}
+                                    onChange={(event, date) => handleMonthChange(event, date, payment.id)}
+                                    onClose={() => setActiveMonthPicker(null)}
+                                />
                             )}
                         </View>
                     )}
@@ -303,35 +271,12 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
                                     <Text style={styles.monthPickerText}>{getMonthDisplay(payment.month)}</Text>
                                 </TouchableOpacity>
                                 {activeMonthPicker === payment.id && (
-                                    <Modal
+                                    <DatePicker
                                         visible={true}
-                                        transparent={true}
-                                        animationType="fade"
-                                        onRequestClose={() => setActiveMonthPicker(null)}
-                                    >
-                                        <TouchableOpacity 
-                                            style={styles.modalOverlay}
-                                            activeOpacity={1}
-                                            onPress={() => setActiveMonthPicker(null)}
-                                        >
-                                            <View style={styles.datePickerContainer}>
-                                                <DateTimePicker
-                                                    value={getDateForMonth(payment.month)}
-                                                    mode="date"
-                                                    display="spinner"
-                                                    onChange={(event, date) => handleMonthChange(event, date, payment.id)}
-                                                    textColor={theme.colors.textPrimary}
-                                                    themeVariant="light"
-                                                />
-                                                <TouchableOpacity 
-                                                    style={styles.closeButton}
-                                                    onPress={() => setActiveMonthPicker(null)}
-                                                >
-                                                    <Text style={styles.closeButtonText}>Done</Text>
-                                                </TouchableOpacity>
-                                            </View>
-                                        </TouchableOpacity>
-                                    </Modal>
+                                        value={getDateForMonth(payment.month)}
+                                        onChange={(event, date) => handleMonthChange(event, date, payment.id)}
+                                        onClose={() => setActiveMonthPicker(null)}
+                                    />
                                 )}
                             </View>
                             <InputField

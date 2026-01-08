@@ -27,10 +27,18 @@ export default function FirstLaunchDisclaimer({ visible, onAccept }: FirstLaunch
                         <Text style={styles.disclaimerTitle}>⚠️ Important Disclaimer</Text>
                         
                         <Text style={styles.text}>
+                            Loan Copilot is a <Text style={styles.bold}>calculator and educational tool only</Text>. We do not provide financial services, lending, banking, or investment services of any kind.
+                        </Text>
+                        
+                        <Text style={styles.text}>
                             Before using this app, please read and understand the following:
                         </Text>
 
                         <View style={styles.bulletSection}>
+                            <Text style={styles.bulletPoint}>
+                                • <Text style={styles.bold}>Calculator Tool Only:</Text> This is a loan calculator and tracking tool, NOT a financial service provider. We do not offer loans, financial products, or banking services.
+                            </Text>
+                            
                             <Text style={styles.bulletPoint}>
                                 • <Text style={styles.bold}>Not Financial Advice:</Text> This app is for informational and educational purposes only. It does not provide financial, legal, or professional advice.
                             </Text>

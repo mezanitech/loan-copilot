@@ -1,5 +1,10 @@
 import { EarlyPayment } from '../components/EarlyPaymentList';
 
+export type RateAdjustment = {
+    month: number;       // Month when rate changes (1-indexed)
+    newRate: number;     // New annual interest rate (as percentage, e.g., 5 for 5%)
+};
+
 export type LoanParams = {
     principal: number;
     annualRate: number;
@@ -12,6 +17,7 @@ export type PaymentScheduleParams = {
     termInMonths: number;
     startDate: Date;
     earlyPayments?: EarlyPayment[];
+    rateAdjustments?: RateAdjustment[];
 };
 
 export type PaymentDetail = {
@@ -69,6 +75,77 @@ export function calculatePayment({ principal, annualRate, termInMonths }: LoanPa
 }
 
 /**
+ * Calculate total early payments applicable for a specific month
+ * 
+ * @param month - Current month (1-indexed)
+ * @param earlyPayments - Array of early payment configurations
+ * @returns Total early payment amount for this month
+ */
+function getEarlyPaymentsForMonth(month: number, earlyPayments: EarlyPayment[]): number {
+    let totalEarlyPayment = 0;
+
+    earlyPayments.forEach(payment => {
+        const amount = parseFloat(payment.amount) || 0;
+
+        if (payment.type === "recurring") {
+            const startMonth = parseInt(payment.month) || 1;
+            const frequency = parseInt(payment.frequency || "1");
+
+            // Check if this month qualifies for recurring payment
+            if (month >= startMonth && (month - startMonth) % frequency === 0) {
+                totalEarlyPayment += amount;
+            }
+        } else if (payment.type === "one-time" && parseInt(payment.month) === month) {
+            // One-time payments apply to specific month
+            totalEarlyPayment += amount;
+        }
+    });
+
+    return totalEarlyPayment;
+}
+
+/**
+ * Project forward to find the actual payoff month considering current trajectory
+ * This accounts for early payments when calculating remaining term
+ * 
+ * @param currentMonth - Current month in schedule (1-indexed)
+ * @param currentBalance - Remaining balance at current month
+ * @param baseMonthlyPayment - Regular monthly payment (before early payments)
+ * @param currentRate - Current interest rate (as percentage)
+ * @param earlyPayments - Array of early payment configurations
+ * @returns Projected month when loan will be paid off
+ */
+function calculateProjectedPayoffMonth(
+    currentMonth: number,
+    currentBalance: number,
+    baseMonthlyPayment: number,
+    currentRate: number,
+    earlyPayments: EarlyPayment[]
+): number {
+    let balance = currentBalance;
+    let month = currentMonth;
+    const monthlyRate = currentRate / 100 / 12;
+    const maxMonths = 1200; // Safety limit (100 years)
+
+    while (balance > 0 && month < maxMonths) {
+        // Calculate total payment for this month
+        let totalPayment = baseMonthlyPayment + getEarlyPaymentsForMonth(month, earlyPayments);
+
+        // Calculate interest and principal
+        const interest = balance * monthlyRate;
+        const principal = Math.min(totalPayment - interest, balance);
+        
+        balance -= principal;
+        month++;
+
+        // Stop if paid off
+        if (balance <= 0) break;
+    }
+
+    return month - 1; // Return last payment month
+}
+
+/**
  * Generate detailed payment schedule showing how each payment is split between principal and interest
  * 
  * @param params - Loan parameters and optional early payments
@@ -79,7 +156,8 @@ export function generatePaymentSchedule({
     annualRate, 
     termInMonths, 
     startDate, 
-    earlyPayments = [] 
+    earlyPayments = [],
+    rateAdjustments = []
 }: PaymentScheduleParams): PaymentDetail[] {
     // Validate inputs
     if (!principal || !annualRate || !termInMonths || principal <= 0 || annualRate < 0 || termInMonths <= 0) {
@@ -91,8 +169,13 @@ export function generatePaymentSchedule({
         return [];
     }
 
-    const monthlyRate = annualRate / 100 / 12;
-    const { monthlyPayment } = calculatePayment({ principal, annualRate, termInMonths });
+    // Sort rate adjustments by month
+    const sortedRateAdjustments = [...rateAdjustments].sort((a, b) => a.month - b.month);
+
+    // Initialize with starting values
+    let currentRate = annualRate;
+    let monthlyRate = currentRate / 100 / 12;
+    let monthlyPayment = calculatePayment({ principal, annualRate: currentRate, termInMonths }).monthlyPayment;
 
     const schedule: PaymentDetail[] = [];
     let balance = principal;
@@ -102,28 +185,44 @@ export function generatePaymentSchedule({
         // Stop if loan is paid off early
         if (balance <= 0) break;
 
-        // Interest is calculated on remaining balance
+        const currentMonth = i + 1; // 1-indexed month number
+
+        // Check if rate adjusts this month
+        const rateChange = sortedRateAdjustments.find(adj => adj.month === currentMonth);
+        if (rateChange) {
+            // Save old rate before changing
+            const oldRate = currentRate;
+            
+            // Update to new rate
+            currentRate = rateChange.newRate;
+            monthlyRate = currentRate / 100 / 12;
+
+            // Calculate projected payoff month using OLD rate (current trajectory before rate change)
+            const projectedPayoffMonth = calculateProjectedPayoffMonth(
+                currentMonth,
+                balance,
+                monthlyPayment,
+                oldRate, // Use OLD rate to determine current trajectory
+                earlyPayments
+            );
+
+            // Calculate remaining months from current trajectory
+            const remainingMonths = Math.max(1, projectedPayoffMonth - currentMonth + 1);
+
+            // Recalculate monthly payment with NEW rate to maintain the same trajectory
+            monthlyPayment = calculatePayment({
+                principal: balance,
+                annualRate: currentRate,
+                termInMonths: remainingMonths
+            }).monthlyPayment;
+        }
+
+        // Interest is calculated on remaining balance with current rate
         const interestPayment = balance * monthlyRate;
         let totalPayment = monthlyPayment;
 
         // Add all applicable early payments for this month
-        earlyPayments.forEach(payment => {
-            const amount = parseFloat(payment.amount) || 0;
-            const currentMonth = i + 1; // 1-indexed month number
-
-            if (payment.type === "recurring") {
-                const startMonth = parseInt(payment.month) || 1;
-                const frequency = parseInt(payment.frequency || "1");
-
-                // Check if this month qualifies for recurring payment
-                if (currentMonth >= startMonth && (currentMonth - startMonth) % frequency === 0) {
-                    totalPayment += amount;
-                }
-            } else if (payment.type === "one-time" && parseInt(payment.month) === currentMonth) {
-                // One-time payments apply to specific month
-                totalPayment += amount;
-            }
-        });
+        totalPayment += getEarlyPaymentsForMonth(currentMonth, earlyPayments);
 
         // Calculate principal payment (can't exceed remaining balance)
         const principalPayment = Math.min(totalPayment - interestPayment, balance);
@@ -158,24 +257,27 @@ export function calculateSavings({
     annualRate, 
     termInMonths, 
     startDate, 
-    earlyPayments = [] 
+    earlyPayments = [],
+    rateAdjustments = []
 }: PaymentScheduleParams): SavingsCalculation {
-    // Generate schedule with early payments
+    // Generate schedule with early payments and rate adjustments
     const scheduleWithEarlyPayments = generatePaymentSchedule({ 
         principal, 
         annualRate, 
         termInMonths, 
         startDate, 
-        earlyPayments 
+        earlyPayments,
+        rateAdjustments
     });
 
-    // Generate original schedule without early payments
+    // Generate original schedule without early payments but with rate adjustments
     const originalSchedule = generatePaymentSchedule({ 
         principal, 
         annualRate, 
         termInMonths, 
         startDate, 
-        earlyPayments: [] 
+        earlyPayments: [],
+        rateAdjustments
     });
 
     // Calculate total interest with early payments

@@ -95,15 +95,20 @@ export const AutoSaveIndicator = forwardRef<AutoSaveHandle, AutoSaveIndicatorPro
 
         return (
             <View style={styles.container}>
-                {status === 'saving' && (
-                    <>
-                        <ActivityIndicator size="small" color={theme.colors.textSecondary} />
-                        <Text style={styles.text}>Saving...</Text>
-                    </>
-                )}
-                {status === 'saved' && (
-                    <Text style={styles.textSaved}>✓ Saved</Text>
-                )}
+                <View style={styles.badge}>
+                    {status === 'saving' && (
+                        <>
+                            <ActivityIndicator size="small" color={theme.colors.textSecondary} />
+                            <Text style={styles.text}>Saving</Text>
+                        </>
+                    )}
+                    {status === 'saved' && (
+                        <>
+                            <Text style={styles.icon}>✓</Text>
+                            <Text style={styles.textSaved}>Saved</Text>
+                        </>
+                    )}
+                </View>
             </View>
         );
     }
@@ -111,21 +116,36 @@ export const AutoSaveIndicator = forwardRef<AutoSaveHandle, AutoSaveIndicatorPro
 
 const styles = StyleSheet.create({
     container: {
+        position: 'absolute',
+        top: 10,
+        right: 10,
+        zIndex: 1000,
+    },
+    badge: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        padding: theme.spacing.sm,
-        minHeight: 30,
-        gap: theme.spacing.xs,
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        paddingHorizontal: theme.spacing.sm,
+        paddingVertical: theme.spacing.xs,
+        borderRadius: theme.borderRadius.full,
+        gap: 4,
+        ...theme.shadows.sm,
+        borderWidth: 1,
+        borderColor: 'rgba(0, 0, 0, 0.1)',
     },
     text: {
         color: theme.colors.textSecondary,
-        fontSize: theme.fontSize.sm,
+        fontSize: theme.fontSize.xs,
         fontWeight: theme.fontWeight.medium,
+    },
+    icon: {
+        color: theme.colors.success,
+        fontSize: theme.fontSize.sm,
+        fontWeight: theme.fontWeight.bold,
     },
     textSaved: {
         color: theme.colors.success,
-        fontSize: theme.fontSize.sm,
+        fontSize: theme.fontSize.xs,
         fontWeight: theme.fontWeight.semibold,
     },
 });

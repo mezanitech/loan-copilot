@@ -1,21 +1,22 @@
 // Import React hooks for state management and side effects
 import { useState, useEffect, useCallback, useRef } from "react";
 // Import React Native UI components
-import { Text, View, StyleSheet, TouchableOpacity, TouchableWithoutFeedback, Keyboard, ScrollView, Alert, Platform, Modal } from "react-native";
+import { Text, View, StyleSheet, TouchableOpacity, TouchableWithoutFeedback, Keyboard, ScrollView, Alert, Platform, KeyboardAvoidingView } from "react-native";
 // Import AsyncStorage for saving/loading loan data
 import AsyncStorage from '@react-native-async-storage/async-storage';
 // Import routing utilities from expo-router
 import { router, useGlobalSearchParams, useFocusEffect } from 'expo-router';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { theme } from '../../../constants/theme';
 // Import custom reusable components
 import InputField from "../../../components/InputField";
 import TermSelector from "../../../components/TermSelector";
+import DatePicker from "../../../components/DatePicker";
 import PaymentSummary from "../../../components/PaymentSummary";
 import DualLineChart from "../../../components/DualLineChart";
 import { EarlyPayment, isValidEarlyPayment } from "../../../components/EarlyPaymentList";
+import { RateAdjustment } from "../../../components/RateAdjustmentList";
 import { AutoSaveIndicator, AutoSaveHandle } from "../../../components/AutoSaveIndicator";
 // Import calculation utilities
 import { calculatePayment, generatePaymentSchedule, calculateSavings, convertTermToMonths } from "../../../utils/loanCalculations";
@@ -43,6 +44,7 @@ export default function LoanOverviewScreen() {
     const [date, setDate] = useState(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [earlyPayments, setEarlyPayments] = useState<EarlyPayment[]>([]); // List of additional payments
+    const [rateAdjustments, setRateAdjustments] = useState<RateAdjustment[]>([]); // List of rate changes
     const autoSaveRef = useRef<AutoSaveHandle>(null);
     const [currency, setCurrency] = useState<Currency>({ code: 'USD', symbol: '$', name: 'US Dollar', position: 'before' });
 
@@ -69,19 +71,9 @@ export default function LoanOverviewScreen() {
 
     // Handle date selection from date picker
     const onDateChange = (event: any, selectedDate?: Date) => {
-        // On Android, dismiss event is sent when user cancels
-        if (Platform.OS === 'android' && event.type === 'dismissed') {
-            setShowDatePicker(false);
-            return;
-        }
-        
         // Update date if a valid date was selected
         if (selectedDate) {
             setDate(selectedDate);
-            // Close picker on Android after selection
-            if (Platform.OS === 'android') {
-                setShowDatePicker(false);
-            }
             triggerAutoSave();
         }
     };
@@ -112,10 +104,10 @@ export default function LoanOverviewScreen() {
     // Reload loan data when tab comes into focus (to reflect changes from payments tab)
     useFocusEffect(
         useCallback(() => {
-            // Reload currency and earlyPayments (in case they changed in payments tab)
+            // Reload currency, earlyPayments, and rateAdjustments (in case they changed in payments tab)
             // but NOT the other loan data to prevent overwriting user changes
             loadCurrency();
-            loadEarlyPayments();
+            loadAdjustments();
             
             // Save any pending changes when navigating away (without debounce)
             return () => {
@@ -124,7 +116,7 @@ export default function LoanOverviewScreen() {
                     autoSaveRef.current.forceSave();
                 }
             };
-        }, [loanName, loanAmount, interestRate, term, termUnit, date, earlyPayments])
+        }, [loanName, loanAmount, interestRate, term, termUnit, date, earlyPayments, rateAdjustments])
     );
 
     const loadCurrency = async () => {
@@ -132,7 +124,7 @@ export default function LoanOverviewScreen() {
         setCurrency(curr);
     };
 
-    const loadEarlyPayments = async () => {
+    const loadAdjustments = async () => {
         if (!loanId) return;
         
         try {
@@ -142,10 +134,11 @@ export default function LoanOverviewScreen() {
                 const loan = loans.find((l: any) => l.id === loanId);
                 if (loan) {
                     setEarlyPayments(loan.earlyPayments || []);
+                    setRateAdjustments(loan.rateAdjustments || []);
                 }
             }
         } catch (error) {
-            console.error('Error loading early payments:', error);
+            console.error('Error loading adjustments:', error);
         }
     };
 
@@ -166,9 +159,15 @@ export default function LoanOverviewScreen() {
                     setTerm(loan.term.toString());
                     setTermUnit(loan.termUnit);
                     if (loan.startDate) {
-                        setDate(new Date(loan.startDate));
+                        const parsedDate = new Date(loan.startDate);
+                        // Validate date is not invalid (Unix epoch or invalid date)
+                        if (!isNaN(parsedDate.getTime()) && parsedDate.getFullYear() > 1970) {
+                            setDate(parsedDate);
+                        } else {
+                        }
                     }
                     setEarlyPayments(loan.earlyPayments || []);
+                    setRateAdjustments(loan.rateAdjustments || []);
                 }
             }
         } catch (error) {
@@ -213,6 +212,14 @@ export default function LoanOverviewScreen() {
         return Math.max(0, remaining);
     };
 
+    // Convert RateAdjustment[] (strings) to calculation format (numbers)
+    const getRateAdjustmentsForCalc = () => {
+        return rateAdjustments.map(adj => ({
+            month: parseInt(adj.month),
+            newRate: parseFloat(adj.newRate)
+        }));
+    };
+
     // Calculate monthly payment using standard loan amortization formula
     // Save updated loan data to AsyncStorage
     const updateLoan = async () => {
@@ -233,27 +240,13 @@ export default function LoanOverviewScreen() {
             annualRate, 
             termInMonths, 
             startDate: date, 
-            earlyPayments 
+            earlyPayments,
+            rateAdjustments: getRateAdjustmentsForCalc()
         });
         // Calculate actual total based on payment schedule (includes early payments)
         const actualTotal = schedule.length > 0 
             ? schedule.reduce((sum, payment) => sum + payment.payment, 0)
             : monthlyPayment * (termUnit === "years" ? parseFloat(term) * 12 : parseFloat(term));
-
-        // Create updated loan object with all details
-        const updatedLoan = {
-            id: loanId,
-            name: loanName,
-            amount: parseFloat(loanAmount),
-            interestRate: parseFloat(interestRate),
-            term: parseFloat(term),
-            termUnit,
-            startDate: getStartDate(),
-            monthlyPayment,
-            totalPayment: actualTotal,
-            earlyPayments,
-            createdAt: new Date().toISOString(),
-        };
 
         try {
             // Get existing loans from storage
@@ -263,8 +256,29 @@ export default function LoanOverviewScreen() {
             const loanIndex = loans.findIndex((l: any) => l.id === loanId);
             
             if (loanIndex !== -1) {
-                // Cancel existing notifications
+                // Get existing loan to preserve fields we don't manage here
                 const existingLoan = loans[loanIndex];
+                
+                
+                // Create updated loan object, preserving rateAdjustments and other fields
+                const updatedLoan = {
+                    ...existingLoan, // Preserve all existing fields
+                    id: loanId,
+                    name: loanName,
+                    amount: parseFloat(loanAmount),
+                    interestRate: parseFloat(interestRate),
+                    term: parseFloat(term),
+                    termUnit,
+                    startDate: getStartDate(),
+                    monthlyPayment,
+                    totalPayment: actualTotal,
+                    earlyPayments,
+                    rateAdjustments, // Explicitly preserve rate adjustments
+                    createdAt: existingLoan.createdAt || new Date().toISOString(), // Preserve original creation date
+                };
+                
+                
+                // Cancel existing notifications
                 if (existingLoan.scheduledNotificationIds && existingLoan.scheduledNotificationIds.length > 0) {
                     await cancelLoanNotifications(existingLoan.scheduledNotificationIds);
                 }
@@ -285,13 +299,10 @@ export default function LoanOverviewScreen() {
                 }
                 
                 // Add notification IDs to updated loan
-                const loanWithNotifications = {
-                    ...updatedLoan,
-                    scheduledNotificationIds
-                };
+                updatedLoan.scheduledNotificationIds = scheduledNotificationIds;
                 
                 // Replace old loan with updated loan
-                loans[loanIndex] = loanWithNotifications;
+                loans[loanIndex] = updatedLoan;
                 // Save back to storage
                 await AsyncStorage.setItem('loans', JSON.stringify(loans));
             }
@@ -309,72 +320,68 @@ export default function LoanOverviewScreen() {
             return;
         }
         
-        setTimeout(async () => {
-            try {
-                // Filter out invalid early payments before generating PDF
-                const validEarlyPayments = earlyPayments.filter(isValidEarlyPayment);
-                
-                // Prepare loan data for pdf-lib
-                const loanData = {
-                    loanId: loanId || 'unknown',
-                    name: loanName || 'Loan',
-                    amount: parseFloat(loanAmount || '0'),
-                    interestRate: parseFloat(interestRate || '0'),
-                    termInMonths,
-                    monthlyPayment,
-                    totalPayment: actualTotalPayment,
-                    interestSaved,
-                    periodDecrease,
-                    earlyPayments: validEarlyPayments.map(ep => ({
-                        name: ep.name,
-                        type: ep.type,
-                        amount: parseFloat(ep.amount),
-                        month: ep.month,
-                        frequency: ep.frequency
-                    })),
-                    payments: paymentSchedule.map((payment, index) => {
-                        const paymentDate = new Date(date);
-                        paymentDate.setMonth(paymentDate.getMonth() + index);
-                        return {
-                            number: index + 1,
-                            principal: payment.principal,
-                            interest: payment.interest,
-                            balance: payment.balance,
-                            date: paymentDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
-                        };
-                    })
-                };
-                
-                // Generate PDF using robust pdf-lib
-                const pdfBytes = await generateRobustLoanPDF(loanData, currency, date);
-                
-                // Save to device
-                const filename = `${loanData.name.replace(/[^a-zA-Z0-9]/g, '_')}_report.pdf`;
-                const uri = FileSystem.documentDirectory + filename;
-                
-                // Convert Uint8Array to base64 string
-                const base64String = btoa(String.fromCharCode(...pdfBytes));
-                
-                await FileSystem.writeAsStringAsync(uri, base64String, {
-                    encoding: 'base64',
-                });
-                
-                // Share - completely isolated with try-catch
-                try {
-                    await Sharing.shareAsync(uri, { 
-                        mimeType: 'application/pdf',
-                        dialogTitle: 'Share Loan Report'
-                    });
-                } catch {
-                    // Silently ignore all share errors including dismissals
-                }
-            } catch (error) {
-                // Only show alert for actual PDF generation errors
-                if (error instanceof Error && !error.message.includes('cancel')) {
-                    Alert.alert("Error", "Failed to generate PDF");
-                }
-            }
-        }, 0);
+        try {
+            // Filter out invalid early payments before generating PDF
+            const validEarlyPayments = earlyPayments.filter(isValidEarlyPayment);
+            
+            // Prepare loan data for pdf-lib
+            const loanData = {
+                loanId: loanId || 'unknown',
+                name: loanName || 'Loan',
+                amount: parseFloat(loanAmount || '0'),
+                interestRate: parseFloat(interestRate || '0'),
+                termInMonths,
+                monthlyPayment,
+                totalPayment: actualTotalPayment,
+                interestSaved,
+                periodDecrease,
+                earlyPayments: validEarlyPayments.map(ep => ({
+                    name: ep.name,
+                    type: ep.type,
+                    amount: parseFloat(ep.amount),
+                    month: ep.month,
+                    frequency: ep.frequency
+                })),
+                rateAdjustments: rateAdjustments.map(ra => ({
+                    month: ra.month,
+                    newRate: ra.newRate
+                })),
+                payments: paymentSchedule.map((payment, index) => {
+                    const paymentDate = new Date(date);
+                    paymentDate.setMonth(paymentDate.getMonth() + index);
+                    return {
+                        number: index + 1,
+                        principal: payment.principal,
+                        interest: payment.interest,
+                        balance: payment.balance,
+                        date: paymentDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+                    };
+                })
+            };
+            
+            // Generate PDF using robust pdf-lib
+            const pdfBytes = await generateRobustLoanPDF(loanData, currency, date);
+            
+            // Save to device
+            const filename = `${loanData.name.replace(/[^a-zA-Z0-9]/g, '_')}_report.pdf`;
+            const uri = FileSystem.documentDirectory + filename;
+            
+            // Convert Uint8Array to base64 string
+            const base64String = btoa(String.fromCharCode(...pdfBytes));
+            
+            await FileSystem.writeAsStringAsync(uri, base64String, {
+                encoding: 'base64',
+            });
+            
+            // Share the PDF
+            await Sharing.shareAsync(uri, { 
+                mimeType: 'application/pdf',
+                dialogTitle: 'Share Loan Report'
+            });
+        } catch (error) {
+            // Silently ignore user cancellations, show alert for real errors
+            console.log('PDF generation/sharing:', error);
+        }
     };
 
     // Calculate payment amounts and schedules using centralized utilities
@@ -391,13 +398,15 @@ export default function LoanOverviewScreen() {
         annualRate, 
         termInMonths, 
         startDate: date, 
-        earlyPayments 
+        earlyPayments,
+        rateAdjustments: getRateAdjustmentsForCalc()
     });
     const originalSchedule = generatePaymentSchedule({ 
         principal, 
         annualRate, 
         termInMonths, 
-        startDate: date 
+        startDate: date,
+        rateAdjustments: getRateAdjustmentsForCalc()
     });
     
     // Calculate savings using centralized utility
@@ -406,7 +415,8 @@ export default function LoanOverviewScreen() {
         annualRate,
         termInMonths,
         startDate: date,
-        earlyPayments
+        earlyPayments,
+        rateAdjustments: getRateAdjustmentsForCalc()
     });
 
     // Extract principal balance data for both original and early payment schedules
@@ -428,14 +438,19 @@ export default function LoanOverviewScreen() {
     }));
 
     // Dismiss keyboard when tapping outside
-    return <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <ScrollView style={styles.container}>
+    return <KeyboardAvoidingView 
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={100}
+    >
+        <AutoSaveIndicator ref={autoSaveRef} onSave={updateLoan} />
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <ScrollView style={styles.container}>
             {/* Action buttons at top */}
             <View style={styles.topButtonContainer}>
                 <TouchableOpacity style={styles.exportButtonTop} onPress={generateTestPDF}>
                     <Text style={styles.exportButtonTopText}>Export Report</Text>
                 </TouchableOpacity>
-                <AutoSaveIndicator ref={autoSaveRef} onSave={updateLoan} />
                 {!isValidLoanData() && (
                     <View style={styles.errorIndicator}>
                         <Text style={styles.errorText}>⚠️ Fix errors</Text>
@@ -498,37 +513,12 @@ export default function LoanOverviewScreen() {
             </View>
 
             {/* Date Picker */}
-            {showDatePicker && (
-                <Modal
-                    visible={showDatePicker}
-                    transparent={true}
-                    animationType="fade"
-                    onRequestClose={() => setShowDatePicker(false)}
-                >
-                    <TouchableOpacity 
-                        style={styles.modalOverlay}
-                        activeOpacity={1}
-                        onPress={() => setShowDatePicker(false)}
-                    >
-                        <View style={styles.datePickerContainer}>
-                            <DateTimePicker
-                                value={date}
-                                mode="date"
-                                display="spinner"
-                                onChange={onDateChange}
-                                textColor={theme.colors.textPrimary}
-                                themeVariant="light"
-                            />
-                            <TouchableOpacity 
-                                style={styles.closeButton}
-                                onPress={() => setShowDatePicker(false)}
-                            >
-                                <Text style={styles.closeButtonText}>Done</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </TouchableOpacity>
-                </Modal>
-            )}
+            <DatePicker
+                visible={showDatePicker}
+                value={date}
+                onChange={onDateChange}
+                onClose={() => setShowDatePicker(false)}
+            />
 
             {/* Show payment summary if calculation is complete */}
             {monthlyPayment > 0 && (
@@ -608,6 +598,46 @@ export default function LoanOverviewScreen() {
                             <Text style={styles.subtleLinkText}>View detailed schedule</Text>
                         </TouchableOpacity>
                     </View>
+
+                    {/* Rate Adjustment Indicators */}
+                    {rateAdjustments.length > 0 && (
+                        <View style={styles.rateAdjustmentContainer}>
+                            <Text style={styles.sectionTitle}>💡 Interest Rate Changes</Text>
+                            <View style={styles.rateInfoNote}>
+                                <Text style={styles.rateInfoText}>
+                                     Your payment amount changes {rateAdjustments.length} time{rateAdjustments.length !== 1 ? 's' : ''} during this loan.
+                                </Text>
+                            </View>
+                            {rateAdjustments.map((adj, index) => {
+                                // Calculate the date for this adjustment
+                                const adjustmentDate = new Date(date);
+                                adjustmentDate.setMonth(adjustmentDate.getMonth() + parseInt(adj.month) - 1);
+                                const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                                const dateString = `${monthNames[adjustmentDate.getMonth()]} ${adjustmentDate.getFullYear()}`;
+                                
+                                return (
+                                    <View key={adj.id} style={styles.rateAdjustmentCard}>
+                                        <View style={styles.rateAdjustmentHeader}>
+                                            <View>
+                                                {adj.name && (
+                                                    <Text style={styles.rateAdjustmentName}>{adj.name}</Text>
+                                                )}
+                                                <Text style={styles.rateAdjustmentMonth}>Payment #{adj.month}</Text>
+                                                <Text style={styles.rateAdjustmentDate}>{dateString}</Text>
+                                            </View>
+                                            <Text style={styles.rateAdjustmentRate}>{adj.newRate}% APR</Text>
+                                        </View>
+                                    </View>
+                                );
+                            })}
+                            <TouchableOpacity 
+                                style={styles.manageRatesButton}
+                                onPress={() => router.push(`/(tabs)/${loanId}/payments`)}
+                            >
+                                <Text style={styles.manageRatesButtonText}>Manage Rate Changes</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
                     
                     {/* Chart showing how principal balance decreases over time - comparing original vs early payments */}
                     <DualLineChart
@@ -629,8 +659,9 @@ export default function LoanOverviewScreen() {
                     
                 </>
             )}
-        </ScrollView>
-    </TouchableWithoutFeedback>;
+            </ScrollView>
+        </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>;
 }
 
 // Styles for the loan overview screen
@@ -867,5 +898,78 @@ const styles = StyleSheet.create({
         color: theme.colors.primary,
         fontSize: theme.fontSize.base,
         fontWeight: theme.fontWeight.bold,
+    },
+    // Rate adjustment styles
+    rateAdjustmentContainer: {
+        marginTop: theme.spacing.xl,
+        padding: theme.spacing.xl,
+        backgroundColor: theme.colors.surfaceGlass,
+        borderRadius: theme.borderRadius.lg,
+        borderWidth: 1,
+        borderColor: theme.colors.glassBorder,
+        borderLeftWidth: 4,
+        borderLeftColor: theme.colors.warning,
+        ...theme.shadows.glass,
+    },
+    rateInfoNote: {
+        backgroundColor: 'rgba(255, 193, 7, 0.1)',
+        padding: theme.spacing.md,
+        borderRadius: theme.borderRadius.md,
+        marginBottom: theme.spacing.lg,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 193, 7, 0.3)',
+    },
+    rateInfoText: {
+        fontSize: theme.fontSize.sm,
+        color: theme.colors.textSecondary,
+        textAlign: 'center',
+    },
+    rateAdjustmentCard: {
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        padding: theme.spacing.md,
+        borderRadius: theme.borderRadius.md,
+        marginBottom: theme.spacing.sm,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    rateAdjustmentHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    rateAdjustmentMonth: {
+        fontSize: theme.fontSize.base,
+        color: theme.colors.textSecondary,
+        fontWeight: theme.fontWeight.medium,
+    },
+    rateAdjustmentDate: {
+        fontSize: theme.fontSize.xs,
+        color: theme.colors.textTertiary,
+        marginTop: 2,
+    },
+    rateAdjustmentRate: {
+        fontSize: theme.fontSize.lg,
+        color: theme.colors.warning,
+        fontWeight: theme.fontWeight.bold,
+    },
+    rateAdjustmentName: {
+        fontSize: theme.fontSize.sm,
+        color: theme.colors.textSecondary,
+        marginTop: theme.spacing.xs,
+        fontStyle: 'italic',
+    },
+    manageRatesButton: {
+        backgroundColor: 'rgba(255, 193, 7, 0.15)',
+        padding: theme.spacing.md,
+        borderRadius: theme.borderRadius.md,
+        alignItems: 'center',
+        marginTop: theme.spacing.md,
+        borderWidth: 1,
+        borderColor: theme.colors.warning,
+    },
+    manageRatesButtonText: {
+        color: theme.colors.warning,
+        fontSize: theme.fontSize.base,
+        fontWeight: theme.fontWeight.semibold,
     },
 });

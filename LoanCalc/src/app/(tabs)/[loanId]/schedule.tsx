@@ -9,6 +9,7 @@ import { useGlobalSearchParams, useFocusEffect } from 'expo-router';
 // Import custom components
 import PaymentDetailCard from "../../../components/PaymentDetailCard";
 import { EarlyPayment } from "../../../components/EarlyPaymentList";
+import { RateAdjustment } from "../../../components/RateAdjustmentList";
 import { theme } from '../../../constants/theme';
 // Import calculation utilities
 import { calculatePayment, generatePaymentSchedule, convertTermToMonths } from "../../../utils/loanCalculations";
@@ -26,6 +27,7 @@ export default function LoanScheduleScreen() {
     const [termUnit, setTermUnit] = useState<"months" | "years">("months");
     const [startDate, setStartDate] = useState("");
     const [earlyPayments, setEarlyPayments] = useState<EarlyPayment[]>([]); // Additional payments
+    const [rateAdjustments, setRateAdjustments] = useState<RateAdjustment[]>([]); // Interest rate changes
     const [showAllPayments, setShowAllPayments] = useState(false); // Toggle for expanding payment list
 
     // Load loan data when component mounts or loanId changes
@@ -63,6 +65,7 @@ export default function LoanScheduleScreen() {
                     setTermUnit(loan.termUnit);
                     setStartDate(loan.startDate);
                     setEarlyPayments(loan.earlyPayments || []);
+                    setRateAdjustments(loan.rateAdjustments || []);
                 }
             }
         } catch (error) {
@@ -76,6 +79,14 @@ export default function LoanScheduleScreen() {
     const termValue = parseFloat(term);
     const termInMonths = convertTermToMonths(termValue, termUnit);
     
+    // Convert RateAdjustment[] (strings) to calculation format (numbers)
+    const getRateAdjustmentsForCalc = () => {
+        return rateAdjustments.map(adj => ({
+            month: parseInt(adj.month),
+            newRate: parseFloat(adj.newRate)
+        }));
+    };
+    
     // Parse start date from YYYY-MM-DD format
     const [year, month, day] = startDate ? startDate.split('-').map(Number) : [0, 0, 0];
     const startDateObj = year && month && day ? new Date(year, month - 1, day) : new Date();
@@ -85,7 +96,8 @@ export default function LoanScheduleScreen() {
         annualRate, 
         termInMonths, 
         startDate: startDateObj,
-        earlyPayments
+        earlyPayments,
+        rateAdjustments: getRateAdjustmentsForCalc()
     });
     
     // Show first 5 and last 5 payments when collapsed, all when expanded

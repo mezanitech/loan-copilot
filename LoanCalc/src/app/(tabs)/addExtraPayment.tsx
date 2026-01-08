@@ -1,10 +1,10 @@
 import { useState, useCallback, useRef } from "react";
-import { Text, View, StyleSheet, ScrollView, TouchableOpacity, Platform, Modal } from "react-native";
+import { Text, View, StyleSheet, ScrollView, TouchableOpacity, Platform, KeyboardAvoidingView } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, router } from 'expo-router';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { theme } from '../../constants/theme';
 import InputField from "../../components/InputField";
+import DatePicker from "../../components/DatePicker";
 import EarlyPaymentList, { EarlyPaymentListRef, isValidEarlyPayment } from "../../components/EarlyPaymentList";
 import { getCurrencyPreference, Currency } from "../../utils/storage";
 import { formatCurrency } from "../../utils/currencyUtils";
@@ -128,11 +128,6 @@ export default function AddExtraPaymentScreen() {
 
     // Handle month selection
     const handleMonthChange = (event: any, selectedDateValue: Date | undefined) => {
-        // On Android, always close the picker when user interacts
-        if (Platform.OS === 'android') {
-            setShowMonthPicker(false);
-        }
-        
         // Update month if a valid date was selected
         if (selectedDateValue) {
             const loanStartDate = getSelectedLoanStartDate();
@@ -231,7 +226,11 @@ export default function AddExtraPaymentScreen() {
     };
 
     return (
-        <View style={styles.wrapper}>
+        <KeyboardAvoidingView 
+            style={styles.wrapper}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={100}
+        >
             <ScrollView style={styles.container}>
                 <Text style={styles.title}>Add Extra Payment</Text>
                 <Text style={styles.subtitle}>
@@ -439,37 +438,12 @@ export default function AddExtraPaymentScreen() {
                 </View>
 
                 {/* Month Picker Modal */}
-                {showMonthPicker && (
-                    <Modal
-                        visible={showMonthPicker}
-                        transparent={true}
-                        animationType="fade"
-                        onRequestClose={() => setShowMonthPicker(false)}
-                    >
-                        <TouchableOpacity
-                            style={styles.modalOverlay}
-                            activeOpacity={1}
-                            onPress={() => setShowMonthPicker(false)}
-                        >
-                            <View style={styles.datePickerContainer}>
-                                <DateTimePicker
-                                    value={getDateForMonth()}
-                                    mode="date"
-                                    display="spinner"
-                                    onChange={handleMonthChange}
-                                    textColor={theme.colors.textPrimary}
-                                    themeVariant="light"
-                                />
-                                <TouchableOpacity
-                                    style={styles.closeButton}
-                                    onPress={() => setShowMonthPicker(false)}
-                                >
-                                    <Text style={styles.closeButtonText}>Done</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </TouchableOpacity>
-                    </Modal>
-                )}
+                <DatePicker
+                    visible={showMonthPicker}
+                    value={getDateForMonth()}
+                    onChange={handleMonthChange}
+                    onClose={() => setShowMonthPicker(false)}
+                />
 
                 {/* Existing Extra Payments for Selected Loan */}
                 {selectedLoanId && existingPayments.length > 0 && (
@@ -514,7 +488,7 @@ export default function AddExtraPaymentScreen() {
                     <Text style={styles.saveButtonText}>💾 Add Extra Payment</Text>
                 </TouchableOpacity>
             </View>
-        </View>
+        </KeyboardAvoidingView>
     );
 }
 

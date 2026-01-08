@@ -1,13 +1,13 @@
 // Import React hooks and React Native components
-import { useState, useRef, useEffect, useCallback } from "react";
-import { Text, View, StyleSheet, TouchableOpacity, TouchableWithoutFeedback, Keyboard, ScrollView, Alert, Platform, Modal } from "react-native";
+import { useState, useRef, useCallback } from "react";
+import { Text, View, StyleSheet, TouchableOpacity, TouchableWithoutFeedback, Keyboard, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { theme } from '../../constants/theme';
 // Import custom reusable components
 import InputField from "../../components/InputField";
 import TermSelector from "../../components/TermSelector";
+import DatePicker from "../../components/DatePicker";
 import PaymentSummary from "../../components/PaymentSummary";
 import LineChart from "../../components/LineChart";
 import DualLineChart from "../../components/DualLineChart";
@@ -123,12 +123,6 @@ export default function CreateLoanScreen() {
 
     // Handle date selection from date picker
     const onDateChange = (event: any, selectedDate?: Date) => {
-        // On Android, always close the picker when user interacts
-        if (Platform.OS === 'android') {
-            setShowDatePicker(false);
-        }
-        
-        // Update date if a valid date was selected
         if (selectedDate) {
             setDate(selectedDate);
             triggerAutoSave();
@@ -207,6 +201,8 @@ export default function CreateLoanScreen() {
                 startDate: getStartDate(),
                 monthlyPayment,
                 totalPayment,
+                earlyPayments: existingLoanIndex !== -1 ? loans[existingLoanIndex].earlyPayments || [] : [],
+                rateAdjustments: existingLoanIndex !== -1 ? loans[existingLoanIndex].rateAdjustments || [] : [],
                 createdAt: existingLoanIndex !== -1 ? loans[existingLoanIndex].createdAt : new Date().toISOString(),
             };
             
@@ -251,7 +247,12 @@ export default function CreateLoanScreen() {
     };
 
     // Dismiss keyboard when tapping outside
-    return <View style={styles.wrapper}>
+    return <KeyboardAvoidingView 
+        style={styles.wrapper}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={100}
+    >
+        <AutoSaveIndicator ref={autoSaveRef} onSave={saveLoan} />
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <ScrollView style={styles.container}>
         {/* Page title */}
@@ -259,7 +260,6 @@ export default function CreateLoanScreen() {
             Calculate your loan payments
         </Text>
         
-        <AutoSaveIndicator ref={autoSaveRef} onSave={saveLoan} />
         {!isValidLoanData() && (
             <View style={styles.errorIndicator}>
                 <Text style={styles.errorText}>⚠️ Fill in all fields</Text>
@@ -324,37 +324,12 @@ export default function CreateLoanScreen() {
         </View>
 
         {/* Date Picker */}
-        {showDatePicker && (
-            <Modal
-                visible={showDatePicker}
-                transparent={true}
-                animationType="fade"
-                onRequestClose={() => setShowDatePicker(false)}
-            >
-                <TouchableOpacity 
-                    style={styles.modalOverlay}
-                    activeOpacity={1}
-                    onPress={() => setShowDatePicker(false)}
-                >
-                    <View style={styles.datePickerContainer}>
-                        <DateTimePicker
-                            value={date}
-                            mode="date"
-                            display="spinner"
-                            onChange={onDateChange}
-                            textColor={theme.colors.textPrimary}
-                            themeVariant="light"
-                        />
-                        <TouchableOpacity 
-                            style={styles.closeButton}
-                            onPress={() => setShowDatePicker(false)}
-                        >
-                            <Text style={styles.closeButtonText}>Done</Text>
-                        </TouchableOpacity>
-                    </View>
-                </TouchableOpacity>
-            </Modal>
-        )}
+        <DatePicker
+            visible={showDatePicker}
+            value={date}
+            onChange={onDateChange}
+            onClose={() => setShowDatePicker(false)}
+        />
 
         {/* Show payment summary if calculation is complete */}
         {monthlyPayment > 0 && (
@@ -440,7 +415,7 @@ export default function CreateLoanScreen() {
 
             </ScrollView>
         </TouchableWithoutFeedback>
-    </View>;
+    </KeyboardAvoidingView>;
 }
 
 // Styles for the create loan screen

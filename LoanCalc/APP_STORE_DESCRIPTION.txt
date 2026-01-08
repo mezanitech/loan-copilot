@@ -3,7 +3,9 @@ APP STORE DESCRIPTION FOR LOAN CO-PILOT
 
 Take Control of Your Debt Journey
 
-Loan Co-Pilot is your personal financial companion for managing loans and accelerating your path to becoming debt-free. Whether you have a mortgage, student loans, car payments, or personal debts, Loan Copilot gives you the clarity and tools you need to take control.
+Loan Co-Pilot is a calculator and educational tool for tracking loans and planning your path to becoming debt-free. Whether you have a mortgage, student loans, car payments, or personal debts, Loan Copilot gives you the clarity and tools you need to take control.
+
+IMPORTANT: This is a calculator tool, NOT a financial service. We do not provide loans, banking, lending, or any financial products or services.
 
 Key Features:
 

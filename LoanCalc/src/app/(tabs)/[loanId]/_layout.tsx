@@ -82,8 +82,8 @@ export default function LoanTabLayout() {
             <Tabs.Screen 
                 name="payments" 
                 options={{ 
-                    title: "Extra Payments",
-                    tabBarLabel: "Payments",
+                    title: "Adjustments",
+                    tabBarLabel: "Adjustments",
                     tabBarIcon: ({ color, size }) => (
                         <Ionicons name="wallet-outline" size={size || 24} color={color} />
                     ),

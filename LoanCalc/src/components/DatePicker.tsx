@@ -1,166 +1,106 @@
-// Import React Native UI components
-import { Text, View, StyleSheet } from "react-native";
-import { Picker } from "@react-native-picker/picker";
+// Centralized modal date picker component using native DateTimePicker
+import { Modal, TouchableOpacity, View, Text, StyleSheet, Platform } from "react-native";
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { theme } from "../constants/theme";
 
 // Define props for the DatePicker component
 type DatePickerProps = {
-    label: string; // Label shown above the date picker
-    value: string; // Current date value in YYYY-MM-DD format
-    onChangeDate: (date: string) => void; // Callback when date changes
+    visible: boolean; // Whether the modal is visible
+    value: Date; // Current date value
+    onChange: (event: any, selectedDate?: Date) => void; // Callback when date changes
+    onClose: () => void; // Callback when modal is closed
+    minimumDate?: Date; // Optional minimum date
+    maximumDate?: Date; // Optional maximum date
 };
 
-export default function DatePicker({ label, value, onChangeDate }: DatePickerProps) {
-    // Parse the current value or use defaults
-    const parts = value.split('-');
-    const year = parts[0] || new Date().getFullYear().toString();
-    const month = parts[1] || '01';
-    const day = parts[2] || '01';
-
-    // Generate array of years (allow past 20 years and future 20 years for flexibility)
-    const currentYear = new Date().getFullYear();
-    const years = Array.from({ length: 41 }, (_, i) => currentYear - 20 + i);
-
-    // Month names for display
-    const months = [
-        { value: '01', label: 'January' },
-        { value: '02', label: 'February' },
-        { value: '03', label: 'March' },
-        { value: '04', label: 'April' },
-        { value: '05', label: 'May' },
-        { value: '06', label: 'June' },
-        { value: '07', label: 'July' },
-        { value: '08', label: 'August' },
-        { value: '09', label: 'September' },
-        { value: '10', label: 'October' },
-        { value: '11', label: 'November' },
-        { value: '12', label: 'December' },
-    ];
-
-    // Generate days based on selected month and year
-    const getDaysInMonth = (m: string, y: string) => {
-        const daysInMonth = new Date(parseInt(y), parseInt(m), 0).getDate();
-        return Array.from({ length: daysInMonth }, (_, i) => {
-            const d = (i + 1).toString().padStart(2, '0');
-            return d;
-        });
+export default function DatePicker({ 
+    visible, 
+    value, 
+    onChange, 
+    onClose,
+    minimumDate = new Date(2000, 0, 1),
+    maximumDate = new Date(2099, 11, 31)
+}: DatePickerProps) {
+    const handleChange = (event: any, selectedDate?: Date) => {
+        // On Android, dismiss event is sent when user cancels
+        if (Platform.OS === 'android' && event.type === 'dismissed') {
+            onClose();
+            return;
+        }
+        
+        // Call the parent's onChange handler
+        onChange(event, selectedDate);
+        
+        // Close picker on Android after selection
+        if (Platform.OS === 'android' && selectedDate) {
+            onClose();
+        }
     };
 
-    const days = getDaysInMonth(month, year);
-
-    // Handle changes to year, month, or day
-    const handleYearChange = (newYear: string) => {
-        onChangeDate(`${newYear}-${month}-${day}`);
-    };
-
-    const handleMonthChange = (newMonth: string) => {
-        // Make sure day is valid for new month
-        const daysInNewMonth = getDaysInMonth(newMonth, year);
-        const validDay = daysInNewMonth.includes(day) ? day : '01';
-        onChangeDate(`${year}-${newMonth}-${validDay}`);
-    };
-
-    const handleDayChange = (newDay: string) => {
-        onChangeDate(`${year}-${month}-${newDay}`);
-    };
+    if (!visible) return null;
 
     return (
-        <View style={styles.container}>
-            {/* Label */}
-            <Text style={styles.label}>{label}</Text>
-            
-            {/* Row with three pickers */}
-            <View style={styles.pickerRow}>
-                {/* Month Picker */}
-                <View style={styles.pickerContainer}>
-                    <Text style={styles.pickerLabel}>Month</Text>
-                    <View style={styles.pickerWrapper}>
-                        <Picker
-                            selectedValue={month}
-                            onValueChange={handleMonthChange}
-                            style={styles.picker}
-                        >
-                            {months.map((m) => (
-                                <Picker.Item key={m.value} label={m.label} value={m.value} />
-                            ))}
-                        </Picker>
-                    </View>
+        <Modal
+            visible={visible}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={onClose}
+        >
+            <TouchableOpacity 
+                style={styles.modalOverlay}
+                activeOpacity={1}
+                onPress={onClose}
+            >
+                <View style={styles.datePickerContainer}>
+                    <DateTimePicker
+                        value={value}
+                        mode="date"
+                        display="spinner"
+                        onChange={handleChange}
+                        textColor={theme.colors.textPrimary}
+                        themeVariant="light"
+                        minimumDate={minimumDate}
+                        maximumDate={maximumDate}
+                    />
+                    <TouchableOpacity 
+                        style={styles.closeButton}
+                        onPress={onClose}
+                    >
+                        <Text style={styles.closeButtonText}>Done</Text>
+                    </TouchableOpacity>
                 </View>
-
-                {/* Day Picker */}
-                <View style={styles.pickerContainer}>
-                    <Text style={styles.pickerLabel}>Day</Text>
-                    <View style={styles.pickerWrapper}>
-                        <Picker
-                            selectedValue={day}
-                            onValueChange={handleDayChange}
-                            style={styles.picker}
-                        >
-                            {days.map((d) => (
-                                <Picker.Item key={d} label={d} value={d} />
-                            ))}
-                        </Picker>
-                    </View>
-                </View>
-
-                {/* Year Picker */}
-                <View style={styles.pickerContainer}>
-                    <Text style={styles.pickerLabel}>Year</Text>
-                    <View style={styles.pickerWrapper}>
-                        <Picker
-                            selectedValue={year}
-                            onValueChange={handleYearChange}
-                            style={styles.picker}
-                        >
-                            {years.map((y) => (
-                                <Picker.Item key={y} label={y.toString()} value={y.toString()} />
-                            ))}
-                        </Picker>
-                    </View>
-                </View>
-            </View>
-        </View>
+            </TouchableOpacity>
+        </Modal>
     );
 }
 
 // Styles for the DatePicker component
 const styles = StyleSheet.create({
-    // Outer container
-    container: {
-        marginBottom: theme.spacing.lg,
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
-    // Label text above pickers
-    label: {
+    datePickerContainer: {
+        backgroundColor: theme.colors.surfaceGlass,
+        borderRadius: theme.borderRadius.lg,
+        borderWidth: 1,
+        borderColor: theme.colors.glassBorder,
+        padding: theme.spacing.xl,
+        margin: theme.spacing.xl,
+        ...theme.shadows.glass,
+    },
+    closeButton: {
+        backgroundColor: theme.colors.primary,
+        padding: theme.spacing.md,
+        borderRadius: theme.borderRadius.md,
+        alignItems: "center",
+        marginTop: theme.spacing.lg,
+    },
+    closeButtonText: {
+        color: theme.colors.textInverse,
         fontSize: theme.fontSize.base,
         fontWeight: theme.fontWeight.semibold,
-        marginBottom: theme.spacing.sm,
-        color: theme.colors.textPrimary,
-    },
-    // Row containing all three pickers
-    pickerRow: {
-        flexDirection: "row",
-        gap: theme.spacing.md,
-    },
-    // Container for each individual picker
-    pickerContainer: {
-        flex: 1,
-    },
-    // Small label above each picker
-    pickerLabel: {
-        fontSize: theme.fontSize.xs,
-        color: theme.colors.textSecondary,
-        marginBottom: 4,
-    },
-    // Wrapper with border around picker
-    pickerWrapper: {
-        borderWidth: 1,
-        borderColor: theme.colors.gray300,
-        borderRadius: theme.borderRadius.sm,
-        backgroundColor: theme.colors.surface,
-    },
-    // The actual picker component
-    picker: {
-        height: 50,
-        width: '100%',
     },
 });

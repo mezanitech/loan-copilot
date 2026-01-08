@@ -16,15 +16,23 @@ export default function AboutScreen() {
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>What is Loan Copilot?</Text>
                 <Text style={styles.text}>
-                    Loan Copilot is a loan calculator and management tool designed to help you track your loans, 
+                    Loan Copilot is a <Text style={styles.bold}>calculator and educational tool</Text> designed to help you track your loans, 
                     plan payments, and visualize your path to becoming debt-free. Calculate monthly payments, 
                     explore extra payment strategies, and stay on top of your financial goals.
+                </Text>
+                <Text style={styles.text}>
+                    {"\n"}<Text style={styles.bold}>Important:</Text> We are NOT a financial institution, lender, or financial service provider. 
+                    We do not offer loans, banking services, or financial products of any kind.
                 </Text>
             </View>
 
             {/* Disclaimer */}
             <View style={styles.disclaimerSection}>
                 <Text style={styles.disclaimerTitle}>⚠️ Important Disclaimer</Text>
+                <Text style={styles.disclaimerText}>
+                    This app is a <Text style={styles.bold}>calculator tool only</Text>, NOT a financial service provider. 
+                    We do not provide loans, banking, lending, or any financial products or services.
+                </Text>
                 <Text style={styles.disclaimerText}>
                     Loan Copilot is provided for informational and educational purposes only. All calculations, 
                     recommendations, and strategies presented in this app are estimates and should not be 
@@ -101,7 +109,7 @@ export default function AboutScreen() {
                 >
                     <Text style={styles.feedbackButtonText}>💬 Send Feedback</Text>
                 </TouchableOpacity>
-                <Text style={styles.text} style={[styles.text, { marginTop: theme.spacing.md }]}>
+                <Text style={[styles.text, { marginTop: theme.spacing.md }]}>
                     For privacy concerns or direct support: tareq_musmar@hotmail.com
                 </Text>
             </View>
@@ -159,6 +167,9 @@ const styles = StyleSheet.create({
         color: theme.colors.textSecondary,
         lineHeight: 24,
         marginBottom: theme.spacing.sm,
+    },
+    bold: {
+        fontWeight: theme.fontWeight.bold,
     },
     disclaimerSection: {
         backgroundColor: '#FFF3CD',

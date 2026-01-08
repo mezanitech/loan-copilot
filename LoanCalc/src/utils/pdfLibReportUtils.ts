@@ -27,6 +27,10 @@ export interface LoanData {
     month: string;
     frequency?: string;
   }[];
+  rateAdjustments?: {
+    month: string;
+    newRate: string;
+  }[];
 }
 
 export async function generateRobustLoanPDF(loanData: LoanData, currency: Currency, startDate?: Date): Promise<Uint8Array> {
@@ -341,6 +345,64 @@ export async function generateRobustLoanPDF(loanData: LoanData, currency: Curren
       });
       
       currentY -= (loanData.earlyPayments.length * 18) + 10;
+    }
+    
+    // 5. INTEREST RATE CHANGES SECTION (if applicable)
+    if (loanData.rateAdjustments && loanData.rateAdjustments.length > 0) {
+      // Add spacing before rate adjustments section
+      currentY -= 20;
+      
+      const rateAdjustmentHeight = 20 + 18 + (loanData.rateAdjustments.length * 18) + 10;
+      
+      // Check if we need a new page
+      if (currentY - rateAdjustmentHeight < contentBottom) {
+        addFooter(currentPage, 1, totalPages);
+        currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+        currentY = contentTop - 20;
+        addHeader(currentPage);
+      }
+      
+      currentPage.drawRectangle({
+        x: margin - 5, y: currentY - rateAdjustmentHeight,
+        width: pageWidth - 2 * margin + 10, height: rateAdjustmentHeight,
+        color: rgb(0.99, 0.97, 0.95),
+        borderColor: rgb(0.75, 0.55, 0.2),
+        borderWidth: 1
+      });
+      
+      currentPage.drawRectangle({
+        x: margin - 5, y: currentY - 22,
+        width: pageWidth - 2 * margin + 10, height: 20,
+        color: rgb(0.75, 0.55, 0.2)
+      });
+      
+      currentPage.drawText('Interest Rate Changes', {
+        x: margin + 5, y: currentY - 13,
+        size: 12, font: helveticaBold, color: rgb(1, 1, 1)
+      });
+      currentY -= 40;
+      
+      loanData.rateAdjustments.forEach((ra, index) => {
+        // Calculate actual date from month number and start date
+        let dateText = '';
+        if (ra.month && startDate) {
+          const monthNum = parseInt(ra.month);
+          if (!isNaN(monthNum)) {
+            const adjustmentDate = new Date(startDate);
+            adjustmentDate.setMonth(adjustmentDate.getMonth() + monthNum - 1);
+            dateText = adjustmentDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+          }
+        }
+        
+        const displayText = `${dateText} - New Rate: ${ra.newRate}% (Payment ${ra.month})`;
+        
+        currentPage.drawText(displayText, {
+          x: margin + 15, y: currentY - (index * 18),
+          size: 9, font: helvetica, color: rgb(0.2, 0.2, 0.2)
+        });
+      });
+      
+      currentY -= (loanData.rateAdjustments.length * 18) + 10;
     }
     
     // Add spacing before payment schedule
