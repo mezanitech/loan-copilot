@@ -11,7 +11,6 @@ import DatePicker from "../../components/DatePicker";
 import PaymentSummary from "../../components/PaymentSummary";
 import LineChart from "../../components/LineChart";
 import DualLineChart from "../../components/DualLineChart";
-import PaymentDetailCard from "../../components/PaymentDetailCard";
 import { AutoSaveIndicator, AutoSaveHandle } from "../../components/AutoSaveIndicator";
 // Import calculation utilities
 import { calculatePayment, generatePaymentSchedule, convertTermToMonths } from "../../utils/loanCalculations";
@@ -30,8 +29,8 @@ export default function CreateLoanScreen() {
     const [termUnit, setTermUnit] = useState<"months" | "years">("years"); // Can be months or years
     const [date, setDate] = useState(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
-    const [showAllPayments, setShowAllPayments] = useState(false); // Toggle for expanding payment details
-    const [createdLoanId, setCreatedLoanId] = useState<string | null>(null); // Track created loan ID
+    const [showViewDetailsButton, setShowViewDetailsButton] = useState(false); // Show button after loan is created
+    const createdLoanId = useRef<string | null>(null); // Track created loan ID
     const autoSaveRef = useRef<AutoSaveHandle>(null);
     const hasNavigatedAway = useRef(false); // Track if user has left the screen
 
@@ -39,25 +38,25 @@ export default function CreateLoanScreen() {
     useFocusEffect(
         useCallback(() => {
             // When screen comes into focus
-            if (hasNavigatedAway.current && createdLoanId) {
+            if (hasNavigatedAway.current && createdLoanId.current) {
                 // Clear all form fields
                 setLoanName('');
                 setLoanAmount('');
                 setInterestRate('');
                 setTerm('');
                 setDate(new Date());
-                setShowAllPayments(false);
-                setCreatedLoanId(null);
+                setShowViewDetailsButton(false);
+                createdLoanId.current = null;
                 hasNavigatedAway.current = false;
             }
             
             // Return cleanup that sets the flag when leaving
             return () => {
-                if (createdLoanId) {
+                if (createdLoanId.current) {
                     hasNavigatedAway.current = true;
                 }
             };
-        }, [createdLoanId])
+        }, [])
     );
 
     // Validation helper
@@ -185,10 +184,22 @@ export default function CreateLoanScreen() {
             const loans = existingLoans ? JSON.parse(existingLoans) : [];
             
             // Determine loan ID - use existing if already created, otherwise create new
-            const loanId = createdLoanId || Date.now().toString();
+            const loanId = createdLoanId.current || Date.now().toString();
             
             // Find if loan already exists
             const existingLoanIndex = loans.findIndex((l: any) => l.id === loanId);
+            
+            // Calculate current monthly payment and remaining balance from schedule
+            const termInMonths = convertTermToMonths(termValue, termUnit);
+            const currentMonthlyPayment = monthlyPayment; // For new loans, current payment is the standard monthly payment
+            const remainingBalance = principal; // For new loans, remaining balance is the full principal
+            
+            // Calculate freedom date (when loan will be paid off)
+            const freedomDate = (() => {
+                const finalDate = new Date(date);
+                finalDate.setMonth(finalDate.getMonth() + termInMonths - 1);
+                return finalDate.toISOString();
+            })();
             
             // Create/update loan object with all details
             const loanData = {
@@ -204,6 +215,9 @@ export default function CreateLoanScreen() {
                 earlyPayments: existingLoanIndex !== -1 ? loans[existingLoanIndex].earlyPayments || [] : [],
                 rateAdjustments: existingLoanIndex !== -1 ? loans[existingLoanIndex].rateAdjustments || [] : [],
                 createdAt: existingLoanIndex !== -1 ? loans[existingLoanIndex].createdAt : new Date().toISOString(),
+                currentMonthlyPayment,
+                remainingBalance,
+                freedomDate,
             };
             
             // Schedule notifications if enabled
@@ -235,7 +249,8 @@ export default function CreateLoanScreen() {
                 // Add new loan to array
                 loans.push(loanWithNotifications);
                 // Store the loan ID so subsequent saves update instead of create
-                setCreatedLoanId(loanId);
+                createdLoanId.current = loanId;
+                setShowViewDetailsButton(true);
             }
             
             // Save back to storage
@@ -358,59 +373,15 @@ export default function CreateLoanScreen() {
             />
         )}
 
-        {/* Detailed payment schedule section */}
-        {paymentSchedule.length > 0 && (
-            <View style={styles.paymentDetailsContainer}>
-                <Text style={styles.sectionTitle}>Payment Details</Text>
-                {(() => {
-                    // Show first 5 and last 5 payments if more than 10 total
-                    let displayPayments = paymentSchedule;
-                    const shouldShowToggle = paymentSchedule.length > 10;
-                    
-                    if (!showAllPayments && shouldShowToggle) {
-                        const firstFive = paymentSchedule.slice(0, 5);
-                        const lastFive = paymentSchedule.slice(-5);
-                        displayPayments = [...firstFive, ...lastFive];
-                    }
-                    
-                    return (
-                        <>
-                            {displayPayments.map((payment, index) => {
-                                // Show separator (...) between first 5 and last 5
-                                const showSeparator = !showAllPayments && shouldShowToggle && index === 5;
-                                
-                                return (
-                                    <View key={payment.paymentNumber}>
-                                        {showSeparator && (
-                                            <View style={styles.separator}>
-                                                <Text style={styles.separatorText}>...</Text>
-                                            </View>
-                                        )}
-                                        <PaymentDetailCard
-                                            paymentNumber={payment.paymentNumber}
-                                            date={payment.date}
-                                            payment={payment.payment}
-                                            principal={payment.principal}
-                                            interest={payment.interest}
-                                            balance={payment.balance}
-                                        />
-                                    </View>
-                                );
-                            })}
-                            {shouldShowToggle && (
-                                <TouchableOpacity 
-                                    style={styles.expandButton}
-                                    onPress={() => setShowAllPayments(!showAllPayments)}
-                                >
-                                    <Text style={styles.expandButtonText}>
-                                        {showAllPayments ? 'Show Less' : `Show All ${paymentSchedule.length} Payments`}
-                                    </Text>
-                                </TouchableOpacity>
-                            )}
-                        </>
-                    );
-                })()}
-            </View>
+        {/* View Loan Details button - shown when loan is created */}
+        {showViewDetailsButton && createdLoanId.current && (
+            <TouchableOpacity 
+                style={styles.viewDetailsButton}
+                onPress={() => router.push(`/(tabs)/${createdLoanId.current}/overview`)}
+                activeOpacity={0.8}
+            >
+                <Text style={styles.viewDetailsButtonText}> View Loan Details</Text>
+            </TouchableOpacity>
         )}
 
             </ScrollView>
@@ -456,39 +427,19 @@ const styles = StyleSheet.create({
         padding: 2,
         marginBottom: theme.spacing.sm,
     },
-    // Container for payment schedule section
-    paymentDetailsContainer: {
+    // View Loan Details button
+    viewDetailsButton: {
+        backgroundColor: theme.colors.primary,
+        padding: theme.spacing.lg,
+        borderRadius: theme.borderRadius.lg,
+        alignItems: "center",
         marginTop: theme.spacing.xl,
         marginBottom: theme.spacing.xl,
+        ...theme.shadows.md,
     },
-    // Section headers
-    sectionTitle: {
-        fontSize: theme.fontSize.xl,
-        fontWeight: theme.fontWeight.bold,
-        marginBottom: theme.spacing.lg,
-        color: theme.colors.textPrimary,
-    },
-    // Separator between first and last 5 payments
-    separator: {
-        alignItems: "center",
-        paddingVertical: theme.spacing.md,
-    },
-    separatorText: {
-        fontSize: theme.fontSize.xl,
-        color: theme.colors.gray400,
-        fontWeight: theme.fontWeight.bold,
-    },
-    // Expand/collapse button
-    expandButton: {
-        backgroundColor: theme.colors.primary,
-        padding: theme.spacing.md,
-        borderRadius: theme.borderRadius.md,
-        alignItems: "center",
-        marginTop: theme.spacing.md,
-    },
-    expandButtonText: {
+    viewDetailsButtonText: {
         color: theme.colors.textInverse,
-        fontSize: theme.fontSize.base,
+        fontSize: theme.fontSize.lg,
         fontWeight: theme.fontWeight.semibold,
     },
     dateLabel: {

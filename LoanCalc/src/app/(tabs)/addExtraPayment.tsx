@@ -1,11 +1,9 @@
-import { useState, useCallback, useRef } from "react";
-import { Text, View, StyleSheet, ScrollView, TouchableOpacity, Platform, KeyboardAvoidingView } from "react-native";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { Text, View, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, router } from 'expo-router';
 import { theme } from '../../constants/theme';
-import InputField from "../../components/InputField";
-import DatePicker from "../../components/DatePicker";
-import EarlyPaymentList, { EarlyPaymentListRef, isValidEarlyPayment } from "../../components/EarlyPaymentList";
+
 import { getCurrencyPreference, Currency } from "../../utils/storage";
 import { formatCurrency } from "../../utils/currencyUtils";
 
@@ -21,6 +19,8 @@ type Loan = {
     totalPayment: number;
     createdAt: string;
     earlyPayments?: EarlyPayment[];
+    rateAdjustments?: Array<{ month: string; newRate: string }>;
+    remainingBalance?: number;
 };
 
 type EarlyPayment = {
@@ -34,18 +34,7 @@ type EarlyPayment = {
 
 export default function AddExtraPaymentScreen() {
     const [loans, setLoans] = useState<Loan[]>([]);
-    const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null);
-    const [existingPayments, setExistingPayments] = useState<EarlyPayment[]>([]);
-    const earlyPaymentListRef = useRef<EarlyPaymentListRef>(null);
     const [currency, setCurrency] = useState<Currency>({ code: 'USD', symbol: '$', name: 'US Dollar', position: 'before' });
-    
-    // Payment fields
-    const [paymentName, setPaymentName] = useState("");
-    const [paymentType, setPaymentType] = useState<"one-time" | "recurring">("one-time");
-    const [amount, setAmount] = useState("");
-    const [month, setMonth] = useState("");
-    const [frequency, setFrequency] = useState("1");
-    const [showMonthPicker, setShowMonthPicker] = useState(false);
 
     // Load loans from storage
     const loadLoans = async () => {
@@ -57,6 +46,35 @@ export default function AddExtraPaymentScreen() {
         } catch (error) {
             console.error('Failed to load loans:', error);
         }
+    };
+
+    // Function to get current interest rate considering rate adjustments
+    const getCurrentInterestRate = (loan: Loan): number => {
+        if (!loan.rateAdjustments || loan.rateAdjustments.length === 0) {
+            return loan.interestRate;
+        }
+
+        // Calculate months elapsed since loan start
+        const startDate = new Date(loan.startDate);
+        const currentDate = new Date();
+        const monthsElapsed = Math.max(0,
+            (currentDate.getFullYear() - startDate.getFullYear()) * 12 +
+            (currentDate.getMonth() - startDate.getMonth())
+        ) + 1; // +1 because first payment is month 1
+
+        // Find the most recent rate adjustment that has occurred
+        let currentRate = loan.interestRate;
+        for (const adjustment of loan.rateAdjustments) {
+            const adjustmentMonth = parseInt(adjustment.month);
+            if (!isNaN(adjustmentMonth) && adjustmentMonth <= monthsElapsed) {
+                const newRate = parseFloat(adjustment.newRate);
+                if (!isNaN(newRate)) {
+                    currentRate = newRate;
+                }
+            }
+        }
+
+        return currentRate;
     };
 
     // Calculate remaining principal for a loan
@@ -91,234 +109,29 @@ export default function AddExtraPaymentScreen() {
         }, [])
     );
 
+    // Auto-redirect to payments screen if only one loan exists
+    useEffect(() => {
+        if (loans.length === 1) {
+            router.push(`/(tabs)/${loans[0].id}/payments`);
+        }
+    }, [loans]);
+
     const loadCurrency = async () => {
         const curr = await getCurrencyPreference();
         setCurrency(curr);
     };
 
-    // Toggle loan selection (single select only)
-    const toggleLoanSelection = (loanId: string) => {
-        const newSelectedId = selectedLoanId === loanId ? null : loanId;
-        setSelectedLoanId(newSelectedId);
-        
-        // Load existing payments for the newly selected loan
-        if (newSelectedId) {
-            const selectedLoan = loans.find(l => l.id === newSelectedId);
-            setExistingPayments(selectedLoan?.earlyPayments || []);
-        } else {
-            setExistingPayments([]);
-        }
-    };
-
-    // Get start date from selected loan
-    const getSelectedLoanStartDate = (): Date => {
-        if (!selectedLoanId) return new Date();
-        const selectedLoan = loans.find(l => l.id === selectedLoanId);
-        return selectedLoan ? new Date(selectedLoan.startDate) : new Date();
-    };
-
-    // Get loan term in months from selected loan
-    const getSelectedLoanTermInMonths = (): number => {
-        if (!selectedLoanId) return 0;
-        const selectedLoan = loans.find(l => l.id === selectedLoanId);
-        if (!selectedLoan) return 0;
-        const termValue = selectedLoan.term;
-        return selectedLoan.termUnit === 'years' ? termValue * 12 : termValue;
-    };
-
-    // Handle month selection
-    const handleMonthChange = (event: any, selectedDateValue: Date | undefined) => {
-        // Update month if a valid date was selected
-        if (selectedDateValue) {
-            const loanStartDate = getSelectedLoanStartDate();
-            const yearDiff = selectedDateValue.getFullYear() - loanStartDate.getFullYear();
-            const monthDiff = selectedDateValue.getMonth() - loanStartDate.getMonth();
-            const totalMonthDiff = (yearDiff * 12) + monthDiff + 1;
-            setMonth(totalMonthDiff.toString());
-        }
-    };
-
-    // Get month display text
-    const getMonthDisplay = (): string => {
-        if (!month) return "Select Month";
-        const paymentMonth = parseInt(month);
-        if (isNaN(paymentMonth) || paymentMonth < 1) return "Select Month";
-        
-        const loanStartDate = getSelectedLoanStartDate();
-        const actualDate = new Date(loanStartDate);
-        actualDate.setMonth(actualDate.getMonth() + paymentMonth - 1);
-        
-        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-        const monthName = monthNames[actualDate.getMonth()];
-        const year = actualDate.getFullYear();
-        
-        return `${monthName} ${year} (Payment #${paymentMonth})`;
-    };
-
-    // Get date for month picker
-    const getDateForMonth = (): Date => {
-        const loanStartDate = getSelectedLoanStartDate();
-        if (!month) {
-            // Default to loan start date (month 1) when no month is selected
-            return loanStartDate;
-        }
-        const paymentMonth = parseInt(month) || 1;
-        const actualDate = new Date(loanStartDate);
-        actualDate.setMonth(actualDate.getMonth() + paymentMonth - 1);
-        return actualDate;
-    };
-
-    // Save extra payment to selected loan
-    const saveExtraPayment = async () => {
-        if (!paymentName || !amount || !month) {
-            alert("Please fill in all fields");
-            return;
-        }
-
-        if (!selectedLoanId) {
-            alert("Please select a loan");
-            return;
-        }
-
-        try {
-            const storedLoans = await AsyncStorage.getItem('loans');
-            const allLoans = storedLoans ? JSON.parse(storedLoans) : [];
-
-            const newPayment: EarlyPayment = {
-                id: Date.now().toString(),
-                name: paymentName,
-                type: paymentType,
-                amount: amount,
-                month: month,
-                ...(paymentType === "recurring" ? { frequency } : {})
-            };
-
-            // Add payment to selected loan
-            const updatedLoans = allLoans.map((loan: Loan) => {
-                if (loan.id === selectedLoanId) {
-                    return {
-                        ...loan,
-                        earlyPayments: [...(loan.earlyPayments || []), newPayment]
-                    };
-                }
-                return loan;
-            });
-
-            await AsyncStorage.setItem('loans', JSON.stringify(updatedLoans));
-
-            // Store the selected loan ID before clearing
-            const loanIdToNavigate = selectedLoanId;
-
-            // Reset form
-            setPaymentName("");
-            setAmount("");
-            setMonth("");
-            setFrequency("1");
-            setSelectedLoanId(null);
-            setPaymentType("one-time");
-
-            // Navigate to the selected loan's overview page
-            router.push(`/(tabs)/${loanIdToNavigate}/overview`);
-        } catch (error) {
-            console.error('Failed to save extra payment:', error);
-            alert("Failed to save extra payment");
-        }
+    // Navigate to payments screen for selected loan
+    const selectLoan = (loanId: string) => {
+        router.push(`/(tabs)/${loanId}/payments`);
     };
 
     return (
-        <KeyboardAvoidingView 
-            style={styles.wrapper}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={100}
-        >
-            <ScrollView style={styles.container}>
-                <Text style={styles.title}>Add Extra Payment</Text>
-                <Text style={styles.subtitle}>
-                    Add an extra payment to one or more loans to reduce interest and pay off faster
-                </Text>
-
-                {/* Payment Name */}
-                <InputField
-                    label="Payment Name"
-                    value={paymentName}
-                    onChangeText={setPaymentName}
-                    placeholder="e.g., Year-end Bonus, Tax Refund"
-                />
-
-                {/* Payment Type Toggle */}
-                <View style={styles.section}>
-                    <Text style={styles.label}>Payment Type</Text>
-                    <View style={styles.toggleContainer}>
-                        <TouchableOpacity
-                            style={[
-                                styles.toggleButton,
-                                paymentType === "one-time" && styles.toggleButtonActive
-                            ]}
-                            onPress={() => setPaymentType("one-time")}
-                        >
-                            <Text style={[
-                                styles.toggleText,
-                                paymentType === "one-time" && styles.toggleTextActive
-                            ]}>
-                                One-time
-                            </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[
-                                styles.toggleButton,
-                                paymentType === "recurring" && styles.toggleButtonActive
-                            ]}
-                            onPress={() => setPaymentType("recurring")}
-                        >
-                            <Text style={[
-                                styles.toggleText,
-                                paymentType === "recurring" && styles.toggleTextActive
-                            ]}>
-                                Recurring
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-
-                {/* Amount */}
-                <InputField
-                    label="Payment Amount"
-                    value={amount}
-                    onChangeText={setAmount}
-                    placeholder="Enter amount"
-                    keyboardType="numeric"
-                    formatNumber={true}
-                />
-
-                {/* Month Selection */}
-                <View style={styles.section}>
-                    <Text style={styles.label}>
-                        {paymentType === "one-time" ? "Payment Month" : "Starting Month"}
-                    </Text>
-                    <TouchableOpacity
-                        style={styles.monthButton}
-                        onPress={() => setShowMonthPicker(true)}
-                        disabled={!selectedLoanId}
-                    >
-                        <Text style={[
-                            styles.monthButtonText,
-                            !selectedLoanId && styles.monthButtonTextDisabled
-                        ]}>
-                            {!selectedLoanId ? "Select a loan first" : getMonthDisplay()}
-                        </Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Frequency (only for recurring) */}
-                {paymentType === "recurring" && (
-                    <InputField
-                        label="Every X Months"
-                        value={frequency}
-                        onChangeText={setFrequency}
-                        placeholder="1"
-                        keyboardType="numeric"
-                    />
-                )}
+        <ScrollView style={styles.container}>
+            <Text style={styles.title}>Manage Extra Payments</Text>
+            <Text style={styles.subtitle}>
+                Select a loan to add extra payments and see their impact on your payoff timeline
+            </Text>
 
                 {/* Payment Strategy Suggestions */}
                 {loans.length > 1 && (
@@ -330,9 +143,9 @@ export default function AddExtraPaymentScreen() {
                             style={styles.strategyCard}
                             onPress={() => {
                                 const highestInterestLoan = loans.reduce((highest, current) => 
-                                    current.interestRate > highest.interestRate ? current : highest
+                                    getCurrentInterestRate(current) > getCurrentInterestRate(highest) ? current : highest
                                 );
-                                setSelectedLoanId(highestInterestLoan.id);
+                                selectLoan(highestInterestLoan.id);
                             }}
                         >
                             <View style={styles.strategyHeader}>
@@ -344,13 +157,13 @@ export default function AddExtraPaymentScreen() {
                             </Text>
                             {(() => {
                                 const highestInterestLoan = loans.reduce((highest, current) => 
-                                    current.interestRate > highest.interestRate ? current : highest
+                                    getCurrentInterestRate(current) > getCurrentInterestRate(highest) ? current : highest
                                 );
                                 return (
                                     <View style={styles.strategyRecommendation}>
                                         <Text style={styles.strategyRecommendText}>Recommended loan:</Text>
                                         <Text style={styles.strategyLoanName}>
-                                            {highestInterestLoan.name || 'Unnamed Loan'} ({highestInterestLoan.interestRate}% APR)
+                                            {highestInterestLoan.name || 'Unnamed Loan'} ({getCurrentInterestRate(highestInterestLoan)}% APR)
                                         </Text>
                                     </View>
                                 );
@@ -362,11 +175,11 @@ export default function AddExtraPaymentScreen() {
                             style={styles.strategyCard}
                             onPress={() => {
                                 const smallestBalanceLoan = loans.reduce((smallest, current) => {
-                                    const smallestRemaining = calculateRemainingPrincipal(smallest);
-                                    const currentRemaining = calculateRemainingPrincipal(current);
+                                    const smallestRemaining = smallest.remainingBalance ?? calculateRemainingPrincipal(smallest);
+                                    const currentRemaining = current.remainingBalance ?? calculateRemainingPrincipal(current);
                                     return currentRemaining < smallestRemaining ? current : smallest;
                                 });
-                                setSelectedLoanId(smallestBalanceLoan.id);
+                                selectLoan(smallestBalanceLoan.id);
                             }}
                         >
                             <View style={styles.strategyHeader}>
@@ -378,11 +191,11 @@ export default function AddExtraPaymentScreen() {
                             </Text>
                             {(() => {
                                 const smallestBalanceLoan = loans.reduce((smallest, current) => {
-                                    const smallestRemaining = calculateRemainingPrincipal(smallest);
-                                    const currentRemaining = calculateRemainingPrincipal(current);
+                                    const smallestRemaining = smallest.remainingBalance ?? calculateRemainingPrincipal(smallest);
+                                    const currentRemaining = current.remainingBalance ?? calculateRemainingPrincipal(current);
                                     return currentRemaining < smallestRemaining ? current : smallest;
                                 });
-                                const remainingBalance = calculateRemainingPrincipal(smallestBalanceLoan);
+                                const remainingBalance = smallestBalanceLoan.remainingBalance ?? calculateRemainingPrincipal(smallestBalanceLoan);
                                 return (
                                     <View style={styles.strategyRecommendation}>
                                         <Text style={styles.strategyRecommendText}>Recommended loan:</Text>
@@ -414,64 +227,20 @@ export default function AddExtraPaymentScreen() {
                         loans.map((loan) => (
                             <TouchableOpacity
                                 key={loan.id}
-                                style={[
-                                    styles.loanItem,
-                                    selectedLoanId === loan.id && styles.loanItemSelected
-                                ]}
-                                onPress={() => toggleLoanSelection(loan.id)}
+                                style={styles.loanItem}
+                                onPress={() => selectLoan(loan.id)}
                             >
                                 <View style={styles.loanItemContent}>
                                     <Text style={styles.loanItemName}>{loan.name || 'Unnamed Loan'}</Text>
                                     <Text style={styles.loanItemDetails}>
-                                        {formatCurrency(loan.amount, currency, 0)} @ {loan.interestRate}%
+                                        {formatCurrency(loan.amount, currency, 0)} @ {getCurrentInterestRate(loan)}%
                                     </Text>
                                 </View>
-                                <View style={[
-                                    styles.radioButton,
-                                    selectedLoanId === loan.id && styles.radioButtonSelected
-                                ]}>
-                                    {selectedLoanId === loan.id && <View style={styles.radioButtonInner} />}
-                                </View>
+                                <Text style={styles.arrowIcon}>→</Text>
                             </TouchableOpacity>
                         ))
                     )}
                 </View>
-
-                {/* Month Picker Modal */}
-                <DatePicker
-                    visible={showMonthPicker}
-                    value={getDateForMonth()}
-                    onChange={handleMonthChange}
-                    onClose={() => setShowMonthPicker(false)}
-                />
-
-                {/* Existing Extra Payments for Selected Loan */}
-                {selectedLoanId && existingPayments.length > 0 && (
-                    <View style={styles.existingPaymentsSection}>
-                        <Text style={styles.existingPaymentsTitle}>📋 Existing Extra Payments</Text>
-                        <Text style={styles.autoSaveNote}>Changes are saved automatically</Text>
-                        <EarlyPaymentList
-                            ref={earlyPaymentListRef}
-                            payments={existingPayments}
-                            onPaymentsChange={(updatedPayments) => {
-                                setExistingPayments(updatedPayments);
-                                // Filter out invalid payments before saving
-                                const validPayments = updatedPayments.filter(isValidEarlyPayment);
-                                // Update the loan in storage with only valid payments
-                                const updatedLoans = loans.map(loan => {
-                                    if (loan.id === selectedLoanId) {
-                                        return { ...loan, earlyPayments: validPayments };
-                                    }
-                                    return loan;
-                                });
-                                setLoans(updatedLoans);
-                                AsyncStorage.setItem('loans', JSON.stringify(updatedLoans));
-                            }}
-                            loanStartDate={getSelectedLoanStartDate()}
-                            loanTermInMonths={getSelectedLoanTermInMonths()}
-                        />
-                    </View>
-                )}
 
                 {/* Info Box */}
                 <View style={styles.infoBox}>
@@ -481,25 +250,14 @@ export default function AddExtraPaymentScreen() {
                     </Text>
                 </View>
             </ScrollView>
-
-            {/* Save Button */}
-            <View style={styles.bottomButtonContainer}>
-                <TouchableOpacity style={styles.saveButton} onPress={saveExtraPayment}>
-                    <Text style={styles.saveButtonText}>💾 Add Extra Payment</Text>
-                </TouchableOpacity>
-            </View>
-        </KeyboardAvoidingView>
     );
 }
 
 const styles = StyleSheet.create({
-    wrapper: {
-        flex: 1,
-        backgroundColor: theme.colors.surface,
-    },
     container: {
         flex: 1,
         padding: theme.spacing.xl,
+        backgroundColor: theme.colors.surface,
     },
     title: {
         fontSize: theme.fontSize.huge,
@@ -522,43 +280,6 @@ const styles = StyleSheet.create({
         marginBottom: theme.spacing.sm,
         color: theme.colors.textPrimary,
     },
-    toggleContainer: {
-        flexDirection: 'row',
-        backgroundColor: theme.colors.gray200,
-        borderRadius: theme.borderRadius.lg,
-        padding: 4,
-    },
-    toggleButton: {
-        flex: 1,
-        padding: theme.spacing.md,
-        borderRadius: theme.borderRadius.md,
-        alignItems: 'center',
-    },
-    toggleButtonActive: {
-        backgroundColor: theme.colors.primary,
-    },
-    toggleText: {
-        fontSize: theme.fontSize.sm,
-        color: theme.colors.textSecondary,
-        fontWeight: theme.fontWeight.semibold,
-    },
-    toggleTextActive: {
-        color: theme.colors.textInverse,
-    },
-    monthButton: {
-        backgroundColor: theme.colors.background,
-        borderWidth: 1.5,
-        borderColor: theme.colors.gray200,
-        borderRadius: theme.borderRadius.md,
-        padding: theme.spacing.md,
-    },
-    monthButtonText: {
-        fontSize: theme.fontSize.base,
-        color: theme.colors.textPrimary,
-    },
-    monthButtonTextDisabled: {
-        color: theme.colors.gray400,
-    },
     loanItem: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -567,12 +288,6 @@ const styles = StyleSheet.create({
         padding: theme.spacing.lg,
         borderRadius: theme.borderRadius.lg,
         marginBottom: theme.spacing.md,
-        borderWidth: 2,
-        borderColor: 'transparent',
-    },
-    loanItemSelected: {
-        borderColor: theme.colors.primary,
-        backgroundColor: theme.colors.gray50,
     },
     loanItemContent: {
         flex: 1,
@@ -587,23 +302,9 @@ const styles = StyleSheet.create({
         fontSize: theme.fontSize.sm,
         color: theme.colors.textSecondary,
     },
-    radioButton: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        borderWidth: 2,
-        borderColor: theme.colors.gray300,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    radioButtonSelected: {
-        borderColor: theme.colors.primary,
-    },
-    radioButtonInner: {
-        width: 12,
-        height: 12,
-        borderRadius: 6,
-        backgroundColor: theme.colors.primary,
+    arrowIcon: {
+        fontSize: theme.fontSize.xl,
+        color: theme.colors.textSecondary,
     },
     strategyCard: {
         backgroundColor: theme.colors.background,
@@ -682,22 +383,6 @@ const styles = StyleSheet.create({
         borderLeftWidth: 4,
         borderLeftColor: theme.colors.primary,
     },
-    existingPaymentsSection: {
-        marginTop: theme.spacing.xl,
-        marginBottom: theme.spacing.xl,
-    },
-    existingPaymentsTitle: {
-        fontSize: theme.fontSize.lg,
-        fontWeight: theme.fontWeight.bold,
-        marginBottom: theme.spacing.xs,
-        color: theme.colors.textPrimary,
-    },
-    autoSaveNote: {
-        fontSize: theme.fontSize.xs,
-        color: theme.colors.textSecondary,
-        marginBottom: theme.spacing.md,
-        fontStyle: 'italic',
-    },
     infoIcon: {
         fontSize: theme.fontSize.xl,
         marginRight: theme.spacing.md,
@@ -707,49 +392,5 @@ const styles = StyleSheet.create({
         fontSize: theme.fontSize.sm,
         color: theme.colors.textSecondary,
         lineHeight: 20,
-    },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    datePickerContainer: {
-        backgroundColor: theme.colors.background,
-        borderRadius: theme.borderRadius.lg,
-        padding: theme.spacing.xl,
-        margin: theme.spacing.xl,
-        ...theme.shadows.lg,
-    },
-    closeButton: {
-        backgroundColor: theme.colors.primary,
-        padding: theme.spacing.md,
-        borderRadius: theme.borderRadius.md,
-        alignItems: "center",
-        marginTop: theme.spacing.lg,
-    },
-    closeButtonText: {
-        color: theme.colors.textInverse,
-        fontSize: theme.fontSize.base,
-        fontWeight: theme.fontWeight.semibold,
-    },
-    bottomButtonContainer: {
-        padding: theme.spacing.xl,
-        paddingBottom: theme.spacing.xxl,
-        backgroundColor: theme.colors.surface,
-        borderTopWidth: 1,
-        borderTopColor: theme.colors.gray200,
-        ...theme.shadows.md,
-    },
-    saveButton: {
-        backgroundColor: theme.colors.primary,
-        padding: theme.spacing.lg,
-        borderRadius: theme.borderRadius.lg,
-        alignItems: 'center',
-    },
-    saveButtonText: {
-        color: theme.colors.textInverse,
-        fontSize: theme.fontSize.base,
-        fontWeight: theme.fontWeight.bold,
     },
 });

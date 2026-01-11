@@ -16,6 +16,24 @@ export interface LoanData {
     interest: number;
     balance: number;
     date: string;
+    // Portfolio-specific fields
+    loanName?: string;
+    interestRate?: number;
+    term?: string;
+    totalInterest?: number;
+    startDate?: string;
+    freedomDate?: string | null;
+    earlyPayments?: { 
+      name?: string;
+      type: 'one-time' | 'recurring';
+      amount: number;
+      month: string;
+      frequency?: string;
+    }[];
+    rateAdjustments?: {
+      month: string;
+      newRate: string;
+    }[];
   }[];
   // Optional fields for individual loan reports
   interestSaved?: number;
@@ -31,6 +49,12 @@ export interface LoanData {
     month: string;
     newRate: string;
   }[];
+  // Additional fields for enhanced individual loan reports
+  currentBalance?: number;
+  currentPaymentNumber?: number;
+  totalPayments?: number;
+  originalTotalPayment?: number;
+  originalTotalInterest?: number;
 }
 
 export async function generateRobustLoanPDF(loanData: LoanData, currency: Currency, startDate?: Date): Promise<Uint8Array> {
@@ -204,6 +228,48 @@ export async function generateRobustLoanPDF(loanData: LoanData, currency: Curren
     
     currentY -= 85;
     
+    // CURRENT STATUS SECTION (if available)
+    if (loanData.currentBalance !== undefined || loanData.currentPaymentNumber !== undefined) {
+      currentPage.drawRectangle({
+        x: margin - 5, y: currentY - 100,
+        width: pageWidth - 2 * margin + 10, height: 95,
+        color: rgb(0.95, 0.99, 0.95),
+        borderColor: rgb(0.2, 0.65, 0.2),
+        borderWidth: 1
+      });
+      
+      currentPage.drawRectangle({
+        x: margin - 5, y: currentY - 22,
+        width: pageWidth - 2 * margin + 10, height: 20,
+        color: rgb(0.2, 0.65, 0.2)
+      });
+      
+      currentPage.drawText('Current Status', {
+        x: margin + 5, y: currentY - 13,
+        size: 12, font: helveticaBold, color: rgb(1, 1, 1)
+      });
+      currentY -= 40;
+      
+      const statusLines = [];
+      if (loanData.currentPaymentNumber !== undefined && loanData.totalPayments !== undefined) {
+        statusLines.push(`Current Payment: #${loanData.currentPaymentNumber} of ${loanData.totalPayments}`);
+      }
+      if (loanData.currentBalance !== undefined) {
+        statusLines.push(`Remaining Balance: ${formatCurrency(loanData.currentBalance, currency, 0)}`);
+      }
+      const paidOff = loanData.currentBalance !== undefined && loanData.currentBalance <= 0;
+      statusLines.push(`Status: ${paidOff ? 'PAID OFF ✓' : 'Active'}`);
+      
+      statusLines.forEach((line, index) => {
+        currentPage.drawText(line, {
+          x: margin + 15, y: currentY - (index * 18),
+          size: 9, font: helveticaBold, color: rgb(0.1, 0.4, 0.1)
+        });
+      });
+      
+      currentY -= (statusLines.length * 18) + 20;
+    }
+    
     // 2. PAYMENT SUMMARY SECTION
     currentPage.drawRectangle({
       x: margin - 5, y: currentY - 100,
@@ -228,8 +294,20 @@ export async function generateRobustLoanPDF(loanData: LoanData, currency: Curren
     const totalInterest = loanData.totalPayment - loanData.amount;
     const payoffDate = loanData.payments[loanData.payments.length - 1]?.date || 'N/A';
     
+    // Determine monthly payment display based on rate adjustments
+    let monthlyPaymentText = `Monthly Payment: ${formatCurrency(loanData.monthlyPayment, currency, 0)}`;
+    if (loanData.rateAdjustments && loanData.rateAdjustments.length > 0) {
+      // Calculate payment range when there are rate adjustments
+      const payments = loanData.payments.map(p => p.principal + p.interest);
+      const minPayment = Math.min(...payments);
+      const maxPayment = Math.max(...payments);
+      if (Math.abs(maxPayment - minPayment) > 0.01) {
+        monthlyPaymentText = `Monthly Payment: ${formatCurrency(minPayment, currency, 0)} - ${formatCurrency(maxPayment, currency, 0)} (varies)`;
+      }
+    }
+    
     const paymentSummaryLines = [
-      `Monthly Payment: ${formatCurrency(loanData.monthlyPayment, currency, 0)}`,
+      monthlyPaymentText,
       `Total Interest: ${formatCurrency(totalInterest, currency, 0)}`,
       `Total Cost: ${formatCurrency(loanData.totalPayment, currency, 0)}`,
       `Payoff Date: ${payoffDate} (${loanData.payments.length} payments)`
@@ -246,9 +324,12 @@ export async function generateRobustLoanPDF(loanData: LoanData, currency: Curren
     
     // 3. YOUR SAVINGS SECTION (if applicable)
     if (loanData.interestSaved && loanData.interestSaved > 0) {
+      const hasComparison = loanData.originalTotalPayment && loanData.originalTotalInterest;
+      const sectionHeight = hasComparison ? 115 : 75;
+      
       currentPage.drawRectangle({
-        x: margin - 5, y: currentY - 80,
-        width: pageWidth - 2 * margin + 10, height: 75,
+        x: margin - 5, y: currentY - sectionHeight,
+        width: pageWidth - 2 * margin + 10, height: sectionHeight,
         color: rgb(0.95, 0.99, 0.95),
         borderColor: rgb(0.2, 0.65, 0.2),
         borderWidth: 1
@@ -260,7 +341,7 @@ export async function generateRobustLoanPDF(loanData: LoanData, currency: Curren
         color: rgb(0.2, 0.65, 0.2)
       });
       
-      currentPage.drawText('Your Savings', {
+      currentPage.drawText('Your Savings (Impact of Early Payments)', {
         x: margin + 5, y: currentY - 13,
         size: 12, font: helveticaBold, color: rgb(1, 1, 1)
       });
@@ -276,14 +357,34 @@ export async function generateRobustLoanPDF(loanData: LoanData, currency: Curren
         `Time Saved: ${timeSavedText}`
       ];
       
+      // Add comparison if available
+      if (hasComparison) {
+        const originalInterest = loanData.originalTotalInterest!;
+        const newTotalPayment = loanData.totalPayment;
+        const newTotalInterest = newTotalPayment - loanData.amount;
+        
+        savingsLines.push('---');
+        savingsLines.push(`Original Total Interest: ${formatCurrency(originalInterest, currency, 0)}`);
+        savingsLines.push(`New Total Interest: ${formatCurrency(newTotalInterest, currency, 0)}`);
+      }
+      
       savingsLines.forEach((line, index) => {
-        currentPage.drawText(line, {
-          x: margin + 15, y: currentY - (index * 18),
-          size: 9, font: helveticaBold, color: rgb(0.1, 0.4, 0.1)
-        });
+        if (line === '---') {
+          currentPage.drawLine({
+            start: { x: margin + 15, y: currentY - (index * 18) + 6 },
+            end: { x: pageWidth - margin - 15, y: currentY - (index * 18) + 6 },
+            thickness: 0.5,
+            color: rgb(0.7, 0.7, 0.7)
+          });
+        } else {
+          currentPage.drawText(line, {
+            x: margin + 15, y: currentY - (index * 18),
+            size: 9, font: helveticaBold, color: rgb(0.1, 0.4, 0.1)
+          });
+        }
       });
       
-      currentY -= 65;
+      currentY -= (savingsLines.length * 18) + 20;
     }
     
     // 4. EARLY PAYMENTS SECTION (if applicable)
@@ -319,11 +420,18 @@ export async function generateRobustLoanPDF(loanData: LoanData, currency: Curren
       currentY -= 40;
       
       loanData.earlyPayments.forEach((ep, index) => {
-        // Format the early payment details
-        const nameText = ep.name ? `${ep.name} - ` : '';
-        const typeText = ep.type === 'recurring' 
-          ? `Recurring (every ${ep.frequency} month${ep.frequency !== '1' ? 's' : ''})` 
-          : 'One-time';
+        // Format the early payment details with name prominently
+        const nameText = ep.name ? `"${ep.name}"` : 'Extra Payment';
+        const amountText = formatCurrency(ep.amount, currency, 0);
+        
+        // Better frequency formatting
+        let typeText = '';
+        if (ep.type === 'recurring') {
+          const freq = ep.frequency || '1';
+          typeText = freq === '1' ? 'Monthly' : `Every ${freq} months`;
+        } else {
+          typeText = 'One-time';
+        }
         
         // Calculate actual date from month number and start date
         let dateText = '';
@@ -332,11 +440,11 @@ export async function generateRobustLoanPDF(loanData: LoanData, currency: Curren
           if (!isNaN(monthNum)) {
             const paymentDate = new Date(startDate);
             paymentDate.setMonth(paymentDate.getMonth() + monthNum - 1);
-            dateText = ` - ${paymentDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`;
+            dateText = paymentDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
           }
         }
         
-        const displayText = `${nameText}${formatCurrency(ep.amount, currency, 0)} - ${typeText}${dateText}`;
+        const displayText = `${nameText}: ${amountText} (${typeText}) - Starting ${dateText}`;
         
         currentPage.drawText(displayText, {
           x: margin + 15, y: currentY - (index * 18),
@@ -384,7 +492,7 @@ export async function generateRobustLoanPDF(loanData: LoanData, currency: Curren
       
       loanData.rateAdjustments.forEach((ra, index) => {
         // Calculate actual date from month number and start date
-        let dateText = '';
+        let dateText = 'Unknown Date';
         if (ra.month && startDate) {
           const monthNum = parseInt(ra.month);
           if (!isNaN(monthNum)) {
@@ -394,7 +502,7 @@ export async function generateRobustLoanPDF(loanData: LoanData, currency: Curren
           }
         }
         
-        const displayText = `${dateText} - New Rate: ${ra.newRate}% (Payment ${ra.month})`;
+        const displayText = `Effective ${dateText}: New Rate ${ra.newRate}%`;
         
         currentPage.drawText(displayText, {
           x: margin + 15, y: currentY - (index * 18),
@@ -433,12 +541,15 @@ export async function generateRobustLoanPDF(loanData: LoanData, currency: Curren
   
   // Table headers - Different for portfolio vs individual loans
   const tableHeaders = isPortfolio 
-    ? ['#', 'Loan Details', 'Loan Amount', 'Total Interest', 'Monthly Pmt']
+    ? ['#', 'Loan Name', 'Amount', 'Remaining', 'Monthly', 'Rate', 'Start Date', 'Payoff Date']
     : ['Payment #', 'Principal', 'Interest', 'Balance', 'Date'];
-  const colWidths = isPortfolio ? [30, 250, 80, 80, 80] : [60, 80, 80, 80, 80];
+  const colWidths = isPortfolio ? [25, 95, 65, 65, 60, 45, 65, 65] : [60, 80, 80, 80, 80];
   const colPositions = isPortfolio 
-    ? [margin, margin + 30, margin + 280, margin + 360, margin + 440]
+    ? [margin, margin + 25, margin + 120, margin + 185, margin + 250, margin + 310, margin + 355, margin + 420]
     : [margin, margin + 60, margin + 140, margin + 220, margin + 300];
+  
+  // Calculate total table width
+  const tableWidth = isPortfolio ? 485 : 380; // Sum of all column widths
   
   // Draw table header on first page
   currentY -= 40;
@@ -500,23 +611,35 @@ export async function generateRobustLoanPDF(loanData: LoanData, currency: Curren
       currentY -= rowHeight;
     }
     
-    // Draw row background with borders (alternate colors)
-    const rowColor = index % 2 === 0 ? rgb(0.97, 0.98, 0.99) : rgb(1, 1, 1);
+    // Determine if this is the current payment (for individual loans)
+    const isCurrentPayment = !isPortfolio && loanData.currentPaymentNumber && payment.number === loanData.currentPaymentNumber;
+    
+    // Draw row background with borders (alternate colors, highlight current payment)
+    let rowColor;
+    if (isCurrentPayment) {
+      rowColor = rgb(0.9, 0.95, 0.9); // Light green for current payment
+    } else {
+      rowColor = index % 2 === 0 ? rgb(0.97, 0.98, 0.99) : rgb(1, 1, 1);
+    }
+    
     currentPage.drawRectangle({
       x: margin, y: currentY - 2,
-      width: pageWidth - 2 * margin, height: rowHeight,
+      width: tableWidth, height: rowHeight,
       color: rowColor,
-      borderColor: rgb(0.9, 0.92, 0.95),
-      borderWidth: 0.3
+      borderColor: isCurrentPayment ? rgb(0.2, 0.65, 0.2) : rgb(0.9, 0.92, 0.95),
+      borderWidth: isCurrentPayment ? 1 : 0.3
     });
     
     // Draw cell data - Different format for portfolio vs payment schedule
     const rowData = isPortfolio ? [
       (payment.number).toString(),
-      payment.date, // Contains loan details for portfolio
-      formatCurrency(payment.principal, currency, 0),
-      formatCurrency(payment.interest, currency, 0),
-      formatCurrency(payment.balance, currency, 0)
+      payment.loanName || payment.date, // Loan name
+      formatCurrency(payment.principal, currency, 0), // Loan amount
+      formatCurrency(payment.interest, currency, 0), // Remaining balance
+      formatCurrency(payment.balance, currency, 0), // Monthly payment
+      `${payment.interestRate}%`, // Rate
+      payment.startDate ? new Date(payment.startDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'N/A', // Start date
+      payment.freedomDate ? new Date(payment.freedomDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'N/A' // Freedom day
     ] : [
       (payment.number).toString(),
       formatCurrency(payment.principal, currency),
@@ -526,16 +649,136 @@ export async function generateRobustLoanPDF(loanData: LoanData, currency: Curren
     ];
     
     rowData.forEach((data, dataIndex) => {
-      const textColor = dataIndex === 0 ? rgb(0.4, 0.4, 0.4) : rgb(0.2, 0.2, 0.2);
-      currentPage.drawText(data, {
-        x: colPositions[dataIndex] + 5, y: currentY + 5,
-        size: 8.5, font: dataIndex === 0 ? helvetica : helvetica, 
+      let textColor;
+      if (isCurrentPayment && !isPortfolio) {
+        textColor = rgb(0.1, 0.5, 0.1); // Green text for current payment
+      } else if (dataIndex === 0) {
+        textColor = rgb(0.4, 0.4, 0.4);
+      } else if (isPortfolio && dataIndex === 7 && payment.freedomDate) {
+        textColor = rgb(0.1, 0.5, 0.1); // Green for freedom date
+      } else {
+        textColor = rgb(0.2, 0.2, 0.2);
+      }
+      
+      const textSize = isPortfolio && (dataIndex === 5 || dataIndex === 6 || dataIndex === 7) ? 7 : 8; // Smaller text for rate/dates
+      const displayData = isCurrentPayment && !isPortfolio && dataIndex === 0 ? `${data} <` : data;
+      
+      currentPage.drawText(displayData, {
+        x: colPositions[dataIndex] + 3, y: currentY + 5,
+        size: textSize, font: isCurrentPayment && !isPortfolio ? helveticaBold : helvetica, 
         color: textColor
       });
     });
     
     currentY -= rowHeight;
     rowsOnCurrentPage++;
+    
+    // For portfolio view, add extra payment and rate adjustment info below the loan row
+    if (isPortfolio) {
+      try {
+        const hasEarlyPayments = payment.earlyPayments && Array.isArray(payment.earlyPayments) && payment.earlyPayments.length > 0;
+        const hasRateAdjustments = payment.rateAdjustments && Array.isArray(payment.rateAdjustments) && payment.rateAdjustments.length > 0;
+        
+        if (hasEarlyPayments || hasRateAdjustments) {
+          // Show early payments if they exist
+          if (hasEarlyPayments) {
+            for (const ep of payment.earlyPayments!) {
+              // Check if we need a new page
+              if (currentY < contentBottom + 20) {
+                addFooter(currentPage, currentPageNum, totalPages);
+                currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+                currentPageNum++;
+                currentY = contentTop - 30;
+                rowsOnCurrentPage = 0;
+                addHeader(currentPage);
+                tableHeaders.forEach((header, headerIndex) => {
+                  currentPage.drawRectangle({
+                    x: colPositions[headerIndex], y: currentY - 2,
+                    width: colWidths[headerIndex], height: 20,
+                    color: rgb(0.2, 0.45, 0.75),
+                    borderColor: rgb(0.15, 0.35, 0.65),
+                    borderWidth: 0.5
+                  });
+                  currentPage.drawText(header, {
+                    x: colPositions[headerIndex] + 5, y: currentY + 6,
+                    size: 9, font: helveticaBold, color: rgb(1, 1, 1)
+                  });
+                });
+                currentY -= rowHeight;
+              }
+              
+              // Calculate date from month number
+              let epDateText = '';
+              if (ep.month && payment.startDate) {
+                const monthNum = parseInt(ep.month);
+                if (!isNaN(monthNum)) {
+                  const epDate = new Date(payment.startDate);
+                  epDate.setMonth(epDate.getMonth() + monthNum - 1);
+                  epDateText = ` - ${epDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`;
+                }
+              }
+              
+              const epText = `      > Extra: ${formatCurrency(ep.amount, currency, 0)} (${ep.type === 'recurring' ? `Every ${ep.frequency || '1'}mo` : 'One-time'})${epDateText}`;
+              currentPage.drawText(epText, {
+                x: margin + 35, y: currentY + 5,
+                size: 7, font: helvetica, color: rgb(0.2, 0.6, 0.2)
+              });
+              currentY -= 14;
+            }
+          }
+          
+          // Show rate adjustments if they exist
+          if (hasRateAdjustments) {
+            for (const ra of payment.rateAdjustments!) {
+              // Check if we need a new page
+              if (currentY < contentBottom + 20) {
+                addFooter(currentPage, currentPageNum, totalPages);
+                currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+                currentPageNum++;
+                currentY = contentTop - 30;
+                rowsOnCurrentPage = 0;
+                addHeader(currentPage);
+                tableHeaders.forEach((header, headerIndex) => {
+                  currentPage.drawRectangle({
+                    x: colPositions[headerIndex], y: currentY - 2,
+                    width: colWidths[headerIndex], height: 20,
+                    color: rgb(0.2, 0.45, 0.75),
+                    borderColor: rgb(0.15, 0.35, 0.65),
+                    borderWidth: 0.5
+                  });
+                  currentPage.drawText(header, {
+                    x: colPositions[headerIndex] + 5, y: currentY + 6,
+                    size: 9, font: helveticaBold, color: rgb(1, 1, 1)
+                  });
+                });
+                currentY -= rowHeight;
+              }
+              
+              // Calculate date from month number
+              let raDateText = '';
+              if (ra.month && payment.startDate) {
+                const monthNum = parseInt(ra.month);
+                if (!isNaN(monthNum)) {
+                  const raDate = new Date(payment.startDate);
+                  raDate.setMonth(raDate.getMonth() + monthNum - 1);
+                  raDateText = raDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                }
+              }
+              
+              const raText = `      > Rate Change: ${ra.newRate}% - ${raDateText || 'N/A'}`;
+              currentPage.drawText(raText, {
+                x: margin + 35, y: currentY + 5,
+                size: 7, font: helvetica, color: rgb(0.7, 0.4, 0)
+              });
+              currentY -= 14;
+            }
+          }
+        }
+      } catch (error) {
+        // Silently skip if there's an error with extra payments/rate adjustments
+        console.log('Error displaying extra info:', error);
+      }
+    }
   });
   
   // Add summary section for portfolio reports ONLY
@@ -578,15 +821,15 @@ export async function generateRobustLoanPDF(loanData: LoanData, currency: Curren
     });
     currentY -= 40;
     
-    // Summary statistics
-    const totalPrincipal = loanData.payments.reduce((sum, payment) => sum + payment.principal, 0);
-    const totalInterest = loanData.payments.reduce((sum, payment) => sum + payment.interest, 0);
+    // Summary statistics - matching index page display
+    const totalBorrowed = loanData.payments.reduce((sum, payment) => sum + payment.principal, 0);
+    const totalRemaining = loanData.payments.reduce((sum, payment) => sum + payment.interest, 0);
+    const totalMonthlyPayment = loanData.payments.reduce((sum, payment) => sum + payment.balance, 0);
     
     const summaryLines = [
-      `Total Loans: ${loanData.payments.length}`,
-      `Total Principal: ${formatCurrency(totalPrincipal, currency, 0)}`,
-      `Total Interest (Lifetime): ${formatCurrency(totalInterest, currency, 0)}`,
-      `Combined Monthly Payment: ${formatCurrency(loanData.monthlyPayment, currency, 0)}`
+      `Total Borrowed: ${formatCurrency(totalBorrowed, currency, 0)}`,
+      `Remaining Principal: ${formatCurrency(totalRemaining, currency, 0)}`,
+      `Total Monthly Payment: ${formatCurrency(totalMonthlyPayment, currency, 0)}`
     ];
     
     summaryLines.forEach((line, index) => {

@@ -1,7 +1,8 @@
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { useState, forwardRef, useImperativeHandle } from "react";
 import InputField from "./InputField";
 import DatePicker from "./DatePicker";
+import EditModal from "./EditModal";
 import { theme } from "../constants/theme";
 
 export type EarlyPayment = {
@@ -44,6 +45,7 @@ export const isValidEarlyPayment = (payment: EarlyPayment): boolean => {
 type EarlyPaymentListProps = {
     payments: EarlyPayment[];
     onPaymentsChange: (payments: EarlyPayment[]) => void;
+    onModalClose?: () => void;
     loanStartDate: Date;
     loanTermInMonths: number;
 };
@@ -53,12 +55,13 @@ export type EarlyPaymentListRef = {
 };
 
 const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
-    ({ payments, onPaymentsChange, loanStartDate, loanTermInMonths }, ref) => {
+    ({ payments, onPaymentsChange, onModalClose, loanStartDate, loanTermInMonths }, ref) => {
     const [activeMonthPicker, setActiveMonthPicker] = useState<string | null>(null);
-    const [expandedPayments, setExpandedPayments] = useState<Set<string>>(new Set());
+    const [editingPayment, setEditingPayment] = useState<string | null>(null);
+    const [draftPayment, setDraftPayment] = useState<EarlyPayment | null>(null);
     
     useImperativeHandle(ref, () => ({
-        collapseAll: () => setExpandedPayments(new Set())
+        collapseAll: () => setEditingPayment(null)
     }));
     
     const addPayment = () => {
@@ -69,33 +72,92 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
             amount: "",
             month: "1", // Default to first payment month
         };
-        onPaymentsChange([...payments, newPayment]);
-        // Collapse all existing payments and expand only the new one
-        setExpandedPayments(new Set([newPayment.id]));
+        setDraftPayment(newPayment);
+        // Open modal for the new payment
+        setEditingPayment(newPayment.id);
     };
 
     const removePayment = (id: string) => {
         onPaymentsChange(payments.filter(p => p.id !== id));
-        // Remove from expanded set
-        const newExpanded = new Set(expandedPayments);
-        newExpanded.delete(id);
-        setExpandedPayments(newExpanded);
+        // Close modal if this payment was being edited
+        if (editingPayment === id) {
+            setEditingPayment(null);
+            setDraftPayment(null);
+        }
+        // Trigger save after deletion
+        if (onModalClose) {
+            setTimeout(() => onModalClose(), 100);
+        }
     };
 
-    const toggleExpand = (id: string) => {
-        const newExpanded = new Set(expandedPayments);
-        if (newExpanded.has(id)) {
-            newExpanded.delete(id);
-        } else {
-            newExpanded.add(id);
+    const openEditModal = (id: string) => {
+        // Create a draft copy of the existing payment
+        const paymentToEdit = payments.find(p => p.id === id);
+        if (paymentToEdit) {
+            setDraftPayment({ ...paymentToEdit });
         }
-        setExpandedPayments(newExpanded);
+        setEditingPayment(id);
+    };
+
+    const closeModal = () => {
+        const payment = getCurrentPayment();
+        const isDraft = draftPayment && editingPayment === draftPayment.id;
+        const isValid = payment && isValidEarlyPayment(payment);
+        
+        // If invalid/incomplete, warn user
+        if (!isValid && (isDraft || payment)) {
+            Alert.alert(
+                'Incomplete Payment',
+                'This payment is incomplete or invalid and will not be saved. Are you sure you want to close?',
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    { 
+                        text: 'Close Anyway', 
+                        style: 'destructive',
+                        onPress: () => {
+                            if (isDraft) {
+                                setDraftPayment(null);
+                            }
+                            setEditingPayment(null);
+                            onModalClose?.();
+                        }
+                    }
+                ]
+            );
+            return;
+        }
+        
+        // Apply the draft changes
+        if (payment && isValid && draftPayment) {
+            // Check if this is a new payment or editing existing
+            const existingIndex = payments.findIndex(p => p.id === payment.id);
+            if (existingIndex >= 0) {
+                // Update existing payment
+                const updatedPayments = [...payments];
+                updatedPayments[existingIndex] = payment;
+                onPaymentsChange(updatedPayments);
+            } else {
+                // Add new payment
+                onPaymentsChange([...payments, payment]);
+            }
+        }
+        setDraftPayment(null);
+        setEditingPayment(null);
+        onModalClose?.();
+    };
+
+    const getCurrentPayment = (): EarlyPayment | undefined => {
+        if (draftPayment && editingPayment === draftPayment.id) {
+            return draftPayment;
+        }
+        return payments.find(p => p.id === editingPayment);
     };
 
     const updatePayment = (id: string, field: keyof EarlyPayment, value: string) => {
-        onPaymentsChange(
-            payments.map(p => p.id === id ? { ...p, [field]: value } : p)
-        );
+        // Always update the draft state (both for new and existing payments)
+        if (draftPayment && id === draftPayment.id) {
+            setDraftPayment({ ...draftPayment, [field]: value });
+        }
     };
 
     const handleMonthChange = (event: any, selectedDate: Date | undefined, paymentId: string) => {
@@ -108,7 +170,6 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
             // Restrict to valid payment months (1 to loanTermInMonths)
             if (totalMonthDiff >= 1 && totalMonthDiff <= loanTermInMonths) {
                 updatePayment(paymentId, "month", totalMonthDiff.toString());
-                setActiveMonthPicker(null);
             }
         }
     };
@@ -159,140 +220,175 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
                 </TouchableOpacity>
             </View>
 
+            {/* Payment cards - click to open modal */}
             {payments.map((payment, index) => {
-                const isExpanded = expandedPayments.has(payment.id);
                 const isComplete = payment.name && payment.amount && payment.month;
                 const isValid = isValidEarlyPayment(payment);
                 
                 return (
-                <View key={payment.id} style={[
-                    styles.paymentCard,
-                    !isValid && styles.paymentCardInvalid
-                ]}>
-                    <TouchableOpacity 
-                        style={styles.cardHeader}
-                        onPress={() => toggleExpand(payment.id)}
-                        activeOpacity={0.7}
-                    >
-                        <View style={styles.cardHeaderLeft}>
-                            <Text style={styles.paymentNumber}>
-                                {payment.name || `Payment #${index + 1}`}
+                <TouchableOpacity 
+                    key={payment.id}
+                    style={[
+                        styles.paymentCard,
+                        !isValid && styles.paymentCardInvalid
+                    ]}
+                    onPress={() => openEditModal(payment.id)}
+                    activeOpacity={0.7}
+                >
+                    <View style={styles.cardHeaderLeft}>
+                        <Text style={styles.paymentNumber}>
+                            {payment.name || `Payment #${index + 1}`}
+                        </Text>
+                        {isComplete && (
+                            <Text style={styles.paymentSummary}>
+                                ${payment.amount} • {payment.type === "one-time" ? getMonthDisplay(payment.month) : `Every ${payment.frequency} month(s) from ${getMonthDisplay(payment.month)}`}
                             </Text>
-                            {!isExpanded && isComplete && (
-                                <Text style={styles.paymentSummary}>
-                                    ${payment.amount} • {payment.type === "one-time" ? getMonthDisplay(payment.month) : `Every ${payment.frequency} month(s) from ${getMonthDisplay(payment.month)}`}
-                                </Text>
-                            )}
-                        </View>
-                        <View style={styles.cardHeaderRight}>
-                            <Text style={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</Text>
-                            <TouchableOpacity
-                                style={styles.removeButton}
-                                onPress={(e) => {
-                                    e.stopPropagation();
-                                    removePayment(payment.id);
-                                }}
-                            >
-                                <Text style={styles.removeButtonText}>✕</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </TouchableOpacity>
-
-                    {isExpanded && (
-                        <View style={styles.expandedContent}>
-                            {!isValid && (
-                                <View style={styles.validationWarning}>
-                                    <Text style={styles.validationWarningText}>⚠️ Please complete all required fields with valid values</Text>
-                                </View>
-                            )}
-                            <InputField
-                                label="Payment Name"
-                                value={payment.name || ""}
-                                onChangeText={(value) => updatePayment(payment.id, "name", value)}
-                                placeholder="e.g., Year-end Bonus, Tax Refund"
-                            />
-
-                    <View style={styles.typeToggle}>
-                        <TouchableOpacity
-                            style={[styles.toggleButton, payment.type === "one-time" && styles.toggleButtonActive]}
-                            onPress={() => updatePayment(payment.id, "type", "one-time")}
-                        >
-                            <Text style={[styles.toggleText, payment.type === "one-time" && styles.toggleTextActive]}>
-                                One-Time
-                            </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.toggleButton, payment.type === "recurring" && styles.toggleButtonActive]}
-                            onPress={() => updatePayment(payment.id, "type", "recurring")}
-                        >
-                            <Text style={[styles.toggleText, payment.type === "recurring" && styles.toggleTextActive]}>
-                                Recurring
-                            </Text>
-                        </TouchableOpacity>
+                        )}
                     </View>
-
-                    <InputField
-                        label="Amount"
-                        value={payment.amount}
-                        onChangeText={(value) => updatePayment(payment.id, "amount", value)}
-                        placeholder="Enter amount"
-                        keyboardType="numeric"
-                        formatNumber={true}
-                    />
-
-                    {payment.type === "one-time" && (
-                        <View>
-                            <Text style={styles.inputLabel}>Payment Month</Text>
-                            <TouchableOpacity
-                                style={styles.monthPickerButton}
-                                onPress={() => setActiveMonthPicker(payment.id)}
-                            >
-                                <Text style={styles.monthPickerText}>{getMonthDisplay(payment.month)}</Text>
-                            </TouchableOpacity>
-                            {activeMonthPicker === payment.id && (
-                                <DatePicker
-                                    visible={true}
-                                    value={getDateForMonth(payment.month)}
-                                    onChange={(event, date) => handleMonthChange(event, date, payment.id)}
-                                    onClose={() => setActiveMonthPicker(null)}
-                                />
-                            )}
-                        </View>
-                    )}
-
-                    {payment.type === "recurring" && (
-                        <>
-                            <View>
-                                <Text style={styles.inputLabel}>Starting Month</Text>
-                                <TouchableOpacity
-                                    style={styles.monthPickerButton}
-                                    onPress={() => setActiveMonthPicker(payment.id)}
-                                >
-                                    <Text style={styles.monthPickerText}>{getMonthDisplay(payment.month)}</Text>
-                                </TouchableOpacity>
-                                {activeMonthPicker === payment.id && (
-                                    <DatePicker
-                                        visible={true}
-                                        value={getDateForMonth(payment.month)}
-                                        onChange={(event, date) => handleMonthChange(event, date, payment.id)}
-                                        onClose={() => setActiveMonthPicker(null)}
-                                    />
-                                )}
-                            </View>
-                            <InputField
-                                label="Frequency (Every X months)"
-                                value={payment.frequency || ""}
-                                onChangeText={(value) => updatePayment(payment.id, "frequency", value)}
-                                placeholder="e.g., 1 (monthly), 2 (bi-monthly), 3 (quarterly)"
-                                keyboardType="numeric"
-                            />
-                        </>
-                    )}
-                        </View>
-                    )}
-                </View>
+                </TouchableOpacity>
                 );
             })}
+
+            {/* Edit Payment Modal */}
+            {editingPayment && (() => {
+                const payment = getCurrentPayment();
+                if (!payment) return null;
+                const isValid = isValidEarlyPayment(payment);
+                
+                return (
+                    <EditModal
+                        visible={true}
+                        onClose={closeModal}
+                        title={payment.name || 'Edit Payment'}
+                        variant="centered"
+                        footer={
+                            <>
+                                {payments.some(p => p.id === payment.id) && (
+                                    <TouchableOpacity 
+                                        style={styles.deleteButton}
+                                        onPress={() => {
+                                            Alert.alert(
+                                                'Delete Payment',
+                                                'Are you sure you want to delete this payment?',
+                                                [
+                                                    { text: 'Cancel', style: 'cancel' },
+                                                    { 
+                                                        text: 'Delete', 
+                                                        style: 'destructive',
+                                                        onPress: () => {
+                                                            removePayment(payment.id);
+                                                        }
+                                                    }
+                                                ]
+                                            );
+                                        }}
+                                    >
+                                        <Text style={styles.deleteButtonText}>Delete</Text>
+                                    </TouchableOpacity>
+                                )}
+                                <TouchableOpacity 
+                                    style={styles.doneButton}
+                                    onPress={closeModal}
+                                >
+                                    <Text style={styles.doneButtonText}>Done</Text>
+                                </TouchableOpacity>
+                            </>
+                        }
+                    >
+                        <>
+                                    {!isValid && (
+                                        <View style={styles.validationWarning}>
+                                            <Text style={styles.validationWarningText}>⚠️ Please complete all required fields with valid values</Text>
+                                        </View>
+                                    )}
+                                    
+                                    <InputField
+                                        label="Payment Name"
+                                        value={payment.name || ""}
+                                        onChangeText={(value) => updatePayment(payment.id, "name", value)}
+                                        placeholder="e.g., Year-end Bonus, Tax Refund"
+                                    />
+
+                                    <View style={styles.typeToggle}>
+                                        <TouchableOpacity
+                                            style={[styles.toggleButton, payment.type === "one-time" && styles.toggleButtonActive]}
+                                            onPress={() => updatePayment(payment.id, "type", "one-time")}
+                                        >
+                                            <Text style={[styles.toggleText, payment.type === "one-time" && styles.toggleTextActive]}>
+                                                One-Time
+                                            </Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={[styles.toggleButton, payment.type === "recurring" && styles.toggleButtonActive]}
+                                            onPress={() => updatePayment(payment.id, "type", "recurring")}
+                                        >
+                                            <Text style={[styles.toggleText, payment.type === "recurring" && styles.toggleTextActive]}>
+                                                Recurring
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    <InputField
+                                        label="Amount"
+                                        value={payment.amount}
+                                        onChangeText={(value) => updatePayment(payment.id, "amount", value)}
+                                        placeholder="Enter amount"
+                                        keyboardType="numeric"
+                                        formatNumber={true}
+                                    />
+
+                                    {payment.type === "one-time" && (
+                                        <View>
+                                            <Text style={styles.inputLabel}>Payment Month</Text>
+                                            <TouchableOpacity
+                                                style={styles.monthPickerButton}
+                                                onPress={() => setActiveMonthPicker(payment.id)}
+                                            >
+                                                <Text style={styles.monthPickerText}>{getMonthDisplay(payment.month)}</Text>
+                                            </TouchableOpacity>
+                                            {activeMonthPicker === payment.id && (
+                                                <DatePicker
+                                                    visible={true}
+                                                    value={getDateForMonth(payment.month)}
+                                                    onChange={(event, date) => handleMonthChange(event, date, payment.id)}
+                                                    onClose={() => setActiveMonthPicker(null)}
+                                                />
+                                            )}
+                                        </View>
+                                    )}
+
+                                    {payment.type === "recurring" && (
+                                        <>
+                                            <View>
+                                                <Text style={styles.inputLabel}>Starting Month</Text>
+                                                <TouchableOpacity
+                                                    style={styles.monthPickerButton}
+                                                    onPress={() => setActiveMonthPicker(payment.id)}
+                                                >
+                                                    <Text style={styles.monthPickerText}>{getMonthDisplay(payment.month)}</Text>
+                                                </TouchableOpacity>
+                                                {activeMonthPicker === payment.id && (
+                                                    <DatePicker
+                                                        visible={true}
+                                                        value={getDateForMonth(payment.month)}
+                                                        onChange={(event, date) => handleMonthChange(event, date, payment.id)}
+                                                        onClose={() => setActiveMonthPicker(null)}
+                                                    />
+                                                )}
+                                            </View>
+                                            <InputField
+                                                label="Frequency (Every X months)"
+                                                value={payment.frequency || ""}
+                                                onChangeText={(value) => updatePayment(payment.id, "frequency", value)}
+                                                placeholder="e.g., 1 (monthly), 2 (bi-monthly), 3 (quarterly)"
+                                                keyboardType="numeric"
+                                            />
+                                        </>
+                                    )}
+                        </>
+                    </EditModal>
+                );
+            })()}
         </View>
     );
 });
@@ -332,6 +428,9 @@ const styles = StyleSheet.create({
         marginBottom: theme.spacing.md,
         borderWidth: 1,
         borderColor: theme.colors.gray200,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
     },
     paymentCardInvalid: {
         borderWidth: 2,
@@ -351,19 +450,8 @@ const styles = StyleSheet.create({
         fontSize: theme.fontSize.xs,
         fontWeight: theme.fontWeight.medium,
     },
-    cardHeader: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: 0,
-    },
     cardHeaderLeft: {
         flex: 1,
-    },
-    cardHeaderRight: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: theme.spacing.md,
     },
     paymentNumber: {
         fontSize: theme.fontSize.base,
@@ -375,13 +463,6 @@ const styles = StyleSheet.create({
         fontSize: theme.fontSize.xs,
         color: theme.colors.textSecondary,
         marginTop: 2,
-    },
-    expandIcon: {
-        fontSize: theme.fontSize.xs,
-        color: theme.colors.textSecondary,
-    },
-    expandedContent: {
-        marginTop: theme.spacing.md,
     },
     removeButton: {
         width: 28,
@@ -440,28 +521,29 @@ const styles = StyleSheet.create({
         fontSize: theme.fontSize.base,
         color: theme.colors.textPrimary,
     },
-    modalOverlay: {
+    // Modal footer button styles (used by EditModal footer prop)
+    deleteButton: {
         flex: 1,
-        justifyContent: 'center',
+        backgroundColor: theme.colors.error,
+        padding: theme.spacing.lg,
+        borderRadius: theme.borderRadius.lg,
         alignItems: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        ...theme.shadows.md,
     },
-    datePickerContainer: {
-        backgroundColor: theme.colors.surface,
-        borderRadius: theme.borderRadius.md,
-        padding: theme.spacing.xl,
-        alignItems: 'center',
+    deleteButtonText: {
+        color: theme.colors.textInverse,
+        fontSize: theme.fontSize.base,
+        fontWeight: theme.fontWeight.semibold,
     },
-    closeButton: {
+    doneButton: {
+        flex: 1,
         backgroundColor: theme.colors.primary,
-        paddingHorizontal: 30,
-        paddingVertical: theme.spacing.md,
-        borderRadius: theme.borderRadius.sm,
-        marginTop: 15,
-        minWidth: 120,
+        padding: theme.spacing.lg,
+        borderRadius: theme.borderRadius.lg,
         alignItems: 'center',
+        ...theme.shadows.md,
     },
-    closeButtonText: {
+    doneButtonText: {
         color: theme.colors.textInverse,
         fontSize: theme.fontSize.base,
         fontWeight: theme.fontWeight.semibold,

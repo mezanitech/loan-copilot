@@ -1,7 +1,7 @@
 // Import React hooks for state management and side effects
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 // Import React Native UI components
-import { Text, View, StyleSheet, TouchableOpacity, TouchableWithoutFeedback, Keyboard, ScrollView, Alert, Platform, KeyboardAvoidingView } from "react-native";
+import { Text, View, StyleSheet, TouchableOpacity, TouchableWithoutFeedback, Keyboard, ScrollView, Alert, Platform, KeyboardAvoidingView, ActivityIndicator } from "react-native";
 // Import AsyncStorage for saving/loading loan data
 import AsyncStorage from '@react-native-async-storage/async-storage';
 // Import routing utilities from expo-router
@@ -18,6 +18,7 @@ import DualLineChart from "../../../components/DualLineChart";
 import { EarlyPayment, isValidEarlyPayment } from "../../../components/EarlyPaymentList";
 import { RateAdjustment } from "../../../components/RateAdjustmentList";
 import { AutoSaveIndicator, AutoSaveHandle } from "../../../components/AutoSaveIndicator";
+import EditModal from "../../../components/EditModal";
 // Import calculation utilities
 import { calculatePayment, generatePaymentSchedule, calculateSavings, convertTermToMonths } from "../../../utils/loanCalculations";
 // Import notification utilities
@@ -47,6 +48,20 @@ export default function LoanOverviewScreen() {
     const [rateAdjustments, setRateAdjustments] = useState<RateAdjustment[]>([]); // List of rate changes
     const autoSaveRef = useRef<AutoSaveHandle>(null);
     const [currency, setCurrency] = useState<Currency>({ code: 'USD', symbol: '$', name: 'US Dollar', position: 'before' });
+    const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+    const [isLoading, setIsLoading] = useState(true); // Loading state for initial data fetch
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false); // Modal state
+    
+    // Draft states for editing in modal - only created when modal opens
+    const [draftData, setDraftData] = useState<{
+        loanName: string;
+        loanAmount: string;
+        interestRate: string;
+        term: string;
+        termUnit: "months" | "years";
+        date: Date;
+    } | null>(null);
+    const [showDraftDatePicker, setShowDraftDatePicker] = useState(false);
 
     // Validation helpers
     const isValidLoanData = () => {
@@ -97,6 +112,7 @@ export default function LoanOverviewScreen() {
     // Load loan data when component mounts or loanId changes
     useEffect(() => {
         if (loanId) {
+            setIsLoading(true);
             loadLoan(loanId);
         }
     }, [loanId]);
@@ -172,44 +188,9 @@ export default function LoanOverviewScreen() {
             }
         } catch (error) {
             console.error('Error loading loan:', error);
+        } finally {
+            setIsLoading(false);
         }
-    };
-
-    // Calculate remaining principal using the standard amortization formula
-    const calculateRemainingPrincipal = (): number => {
-        const principal = parseFloat(loanAmount);
-        const annualRate = parseFloat(interestRate);
-        const termValue = parseFloat(term);
-        
-        if (isNaN(principal) || isNaN(annualRate) || isNaN(termValue)) {
-            return principal || 0;
-        }
-
-        const termInMonths = convertTermToMonths(termValue, termUnit);
-        const monthlyRate = annualRate / 100 / 12;
-        
-        // Handle zero interest rate edge case
-        if (monthlyRate === 0) {
-            const monthsElapsed = Math.max(0, Math.floor((new Date().getTime() - new Date(date).getTime()) / (1000 * 60 * 60 * 24 * 30.44)));
-            return Math.max(0, principal - (principal / termInMonths) * monthsElapsed);
-        }
-
-        // Calculate how many months have passed since the loan start date
-        const monthsElapsed = Math.max(0, Math.floor((new Date().getTime() - new Date(date).getTime()) / (1000 * 60 * 60 * 24 * 30.44)));
-        
-        // If loan term has elapsed, remaining balance is 0
-        if (monthsElapsed >= termInMonths) {
-            return 0;
-        }
-
-        // Standard amortization formula for remaining balance
-        // Remaining = P * [(1 + r)^n - (1 + r)^p] / [(1 + r)^n - 1]
-        // where P = principal, r = monthly rate, n = total periods, p = periods elapsed
-        const futureValue = Math.pow(1 + monthlyRate, termInMonths);
-        const paymentsMade = Math.pow(1 + monthlyRate, monthsElapsed);
-        
-        const remaining = principal * (futureValue - paymentsMade) / (futureValue - 1);
-        return Math.max(0, remaining);
     };
 
     // Convert RateAdjustment[] (strings) to calculation format (numbers)
@@ -259,6 +240,23 @@ export default function LoanOverviewScreen() {
                 // Get existing loan to preserve fields we don't manage here
                 const existingLoan = loans[loanIndex];
                 
+                // Calculate current month and get current payment amount from schedule
+                const monthsElapsed = Math.max(0, Math.floor((new Date().getTime() - new Date(date).getTime()) / (1000 * 60 * 60 * 24 * 30.44)));
+                const currentMonthlyPayment = schedule.length === 0 || monthsElapsed >= schedule.length
+                    ? monthlyPayment
+                    : schedule[monthsElapsed]?.payment || monthlyPayment;
+                const remainingBalance = schedule.length === 0 || monthsElapsed === 0
+                    ? parseFloat(loanAmount)
+                    : monthsElapsed >= schedule.length
+                        ? 0
+                        : Math.max(0, schedule[monthsElapsed]?.balance || 0);
+                
+                // Calculate freedom date (when loan will be paid off)
+                const freedomDate = schedule.length > 0 ? (() => {
+                    const finalDate = new Date(date);
+                    finalDate.setMonth(finalDate.getMonth() + schedule.length - 1);
+                    return finalDate.toISOString();
+                })() : null;
                 
                 // Create updated loan object, preserving rateAdjustments and other fields
                 const updatedLoan = {
@@ -275,7 +273,11 @@ export default function LoanOverviewScreen() {
                     earlyPayments,
                     rateAdjustments, // Explicitly preserve rate adjustments
                     createdAt: existingLoan.createdAt || new Date().toISOString(), // Preserve original creation date
+                    currentMonthlyPayment,
+                    remainingBalance,
+                    freedomDate,
                 };
+
                 
                 
                 // Cancel existing notifications
@@ -320,9 +322,19 @@ export default function LoanOverviewScreen() {
             return;
         }
         
+        setIsGeneratingPDF(true);
         try {
             // Filter out invalid early payments before generating PDF
             const validEarlyPayments = earlyPayments.filter(isValidEarlyPayment);
+            
+            // Calculate current payment (same as shown in UI)
+            const currentMonthlyPayment = paymentSchedule.length > 0 && monthsElapsed < paymentSchedule.length 
+                ? (paymentSchedule[monthsElapsed]?.payment || monthlyPayment) 
+                : monthlyPayment;
+            
+            // Calculate original totals (without early payments or rate adjustments)
+            const originalTotalPayment = monthlyPayment * termInMonths;
+            const originalTotalInterest = originalTotalPayment - parseFloat(loanAmount || '0');
             
             // Prepare loan data for pdf-lib
             const loanData = {
@@ -331,10 +343,15 @@ export default function LoanOverviewScreen() {
                 amount: parseFloat(loanAmount || '0'),
                 interestRate: parseFloat(interestRate || '0'),
                 termInMonths,
-                monthlyPayment,
+                monthlyPayment: currentMonthlyPayment, // Use current payment that reflects rate adjustments
                 totalPayment: actualTotalPayment,
                 interestSaved,
                 periodDecrease,
+                currentBalance: remainingPrincipal,
+                currentPaymentNumber: monthsElapsed + 1,
+                totalPayments: paymentSchedule.length || termInMonths,
+                originalTotalPayment,
+                originalTotalInterest,
                 earlyPayments: validEarlyPayments.map(ep => ({
                     name: ep.name,
                     type: ep.type,
@@ -381,61 +398,161 @@ export default function LoanOverviewScreen() {
         } catch (error) {
             // Silently ignore user cancellations, show alert for real errors
             console.log('PDF generation/sharing:', error);
+        } finally {
+            setIsGeneratingPDF(false);
         }
     };
 
     // Calculate payment amounts and schedules using centralized utilities
     const principal = parseFloat(loanAmount);
     const annualRate = parseFloat(interestRate);
+    // Modal handling functions
+    const openEditModal = () => {
+        // Copy current values to draft object only when modal opens
+        setDraftData({
+            loanName,
+            loanAmount,
+            interestRate,
+            term,
+            termUnit,
+            date
+        });
+        setIsEditModalOpen(true);
+    };
+
+    const closeEditModal = () => {
+        if (!draftData) return;
+        
+        // Validate draft data before saving
+        const isDraftValid = 
+            draftData.loanName.trim() !== '' && 
+            draftData.loanAmount.trim() !== '' && 
+            !isNaN(parseFloat(draftData.loanAmount)) && 
+            parseFloat(draftData.loanAmount) > 0 &&
+            draftData.interestRate.trim() !== '' && 
+            !isNaN(parseFloat(draftData.interestRate)) && 
+            parseFloat(draftData.interestRate) >= 0 &&
+            draftData.term.trim() !== '' && 
+            !isNaN(parseFloat(draftData.term)) && 
+            parseFloat(draftData.term) > 0;
+
+        if (isDraftValid) {
+            // Apply draft changes to actual state
+            setLoanName(draftData.loanName);
+            setLoanAmount(draftData.loanAmount);
+            setInterestRate(draftData.interestRate);
+            setTerm(draftData.term);
+            setTermUnit(draftData.termUnit);
+            setDate(draftData.date);
+            
+            setIsEditModalOpen(false);
+            setDraftData(null);
+            
+            // Trigger save after state updates
+            setTimeout(() => {
+                if (autoSaveRef.current) {
+                    autoSaveRef.current.forceSave();
+                }
+            }, 100);
+        } else {
+            Alert.alert(
+                'Invalid Data',
+                'Please ensure all fields have valid values before saving.',
+                [{ text: 'OK' }]
+            );
+        }
+    };
+
+    const cancelEditModal = () => {
+        // Close without saving and clear draft
+        setIsEditModalOpen(false);
+        setDraftData(null);
+        setShowDraftDatePicker(false);
+    };
+
+    // Handle date selection in modal
+    const onDraftDateChange = (event: any, selectedDate?: Date) => {
+        if (selectedDate && draftData) {
+            setDraftData({ ...draftData, date: selectedDate });
+        }
+    };
+
     const termValue = parseFloat(term);
     const termInMonths = convertTermToMonths(termValue, termUnit);
+    const dateTimestamp = date.getTime(); // Use timestamp for memoization
     
-    const { monthlyPayment, totalPayment } = calculatePayment({ principal, annualRate, termInMonths });
+    // Memoize expensive calculations to prevent recalculating on every render
+    const { monthlyPayment, totalPayment } = useMemo(() => 
+        calculatePayment({ principal, annualRate, termInMonths }),
+        [principal, annualRate, termInMonths]
+    );
     
-    // Generate payment schedules (with and without early payments)
-    const paymentSchedule = generatePaymentSchedule({ 
+    // Memoize rate adjustments conversion
+    const rateAdjustmentsForCalc = useMemo(() => 
+        getRateAdjustmentsForCalc(),
+        [rateAdjustments]
+    );
+    
+    // Generate payment schedules (with and without early payments) - memoized
+    const paymentSchedule = useMemo(() => generatePaymentSchedule({ 
         principal, 
         annualRate, 
         termInMonths, 
         startDate: date, 
         earlyPayments,
-        rateAdjustments: getRateAdjustmentsForCalc()
-    });
-    const originalSchedule = generatePaymentSchedule({ 
+        rateAdjustments: rateAdjustmentsForCalc
+    }), [principal, annualRate, termInMonths, dateTimestamp, earlyPayments, rateAdjustmentsForCalc]);
+    
+    const originalSchedule = useMemo(() => generatePaymentSchedule({ 
         principal, 
         annualRate, 
         termInMonths, 
         startDate: date,
-        rateAdjustments: getRateAdjustmentsForCalc()
-    });
+        rateAdjustments: rateAdjustmentsForCalc
+    }), [principal, annualRate, termInMonths, dateTimestamp, rateAdjustmentsForCalc]);
     
-    // Calculate savings using centralized utility
-    const { actualTotalPayment, totalInterest, interestSaved, periodDecrease } = calculateSavings({
+    // Calculate savings using centralized utility - memoized
+    const { actualTotalPayment, totalInterest, interestSaved, periodDecrease } = useMemo(() => calculateSavings({
         principal,
         annualRate,
         termInMonths,
         startDate: date,
         earlyPayments,
-        rateAdjustments: getRateAdjustmentsForCalc()
-    });
+        rateAdjustments: rateAdjustmentsForCalc
+    }), [principal, annualRate, termInMonths, dateTimestamp, earlyPayments, rateAdjustmentsForCalc]);
 
-    // Extract principal balance data for both original and early payment schedules
-    const originalBalanceData = originalSchedule.map(p => p.balance);
-    const earlyPaymentBalanceData = paymentSchedule.map(p => p.balance);
+    // Extract and memoize chart data
+    const balanceComparisonData = useMemo(() => {
+        const originalBalanceData = originalSchedule.map(p => p.balance);
+        const earlyPaymentBalanceData = paymentSchedule.map(p => p.balance);
+        
+        const maxLength = Math.max(originalBalanceData.length, earlyPaymentBalanceData.length);
+        return Array.from({ length: maxLength }, (_, i) => ({
+            principal: originalBalanceData[i] ?? originalBalanceData[originalBalanceData.length - 1] ?? 0,
+            interest: earlyPaymentBalanceData[i] ?? earlyPaymentBalanceData[earlyPaymentBalanceData.length - 1] ?? 0
+        }));
+    }, [originalSchedule, paymentSchedule]);
     
-    // Create dual balance data for the balance chart
-    // Pad the shorter array with the last value to match lengths
-    const maxLength = Math.max(originalBalanceData.length, earlyPaymentBalanceData.length);
-    const balanceComparisonData = Array.from({ length: maxLength }, (_, i) => ({
-        principal: originalBalanceData[i] ?? originalBalanceData[originalBalanceData.length - 1] ?? 0,
-        interest: earlyPaymentBalanceData[i] ?? earlyPaymentBalanceData[earlyPaymentBalanceData.length - 1] ?? 0
-    }));
-    
-    // Extract principal and interest data for dual chart (with early payment impact)
-    const principalInterestData = paymentSchedule.map(p => ({
-        principal: p.principal,
-        interest: p.interest
-    }));
+    // Extract principal and interest data for dual chart - memoized
+    const principalInterestData = useMemo(() => 
+        paymentSchedule.map(p => ({
+            principal: p.principal,
+            interest: p.interest
+        })),
+        [paymentSchedule]
+    );
+
+    // Calculate remaining principal - memoized
+    const { monthsElapsed, remainingPrincipal } = useMemo(() => {
+        const elapsed = Math.max(0, Math.floor((Date.now() - dateTimestamp) / (1000 * 60 * 60 * 24 * 30.44)));
+        const remaining = paymentSchedule.length === 0 || elapsed === 0
+            ? principal
+            : elapsed >= paymentSchedule.length
+                ? 0
+                : Math.max(0, paymentSchedule[elapsed]?.balance || 0);
+        
+        return { monthsElapsed: elapsed, remainingPrincipal: remaining };
+    }, [dateTimestamp, paymentSchedule, principal]);
 
     // Dismiss keyboard when tapping outside
     return <KeyboardAvoidingView 
@@ -444,12 +561,30 @@ export default function LoanOverviewScreen() {
         keyboardVerticalOffset={100}
     >
         <AutoSaveIndicator ref={autoSaveRef} onSave={updateLoan} />
+        
+        {isLoading ? (
+            <View style={styles.loadingScreen}>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+                <Text style={styles.loadingText}>Loading loan details...</Text>
+            </View>
+        ) : (
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <ScrollView style={styles.container}>
             {/* Action buttons at top */}
             <View style={styles.topButtonContainer}>
-                <TouchableOpacity style={styles.exportButtonTop} onPress={generateTestPDF}>
-                    <Text style={styles.exportButtonTopText}>Export Report</Text>
+                <TouchableOpacity 
+                    style={[styles.exportButtonTop, isGeneratingPDF && styles.exportButtonDisabled]} 
+                    onPress={generateTestPDF}
+                    disabled={isGeneratingPDF}
+                >
+                    {isGeneratingPDF ? (
+                        <View style={styles.loadingContainer}>
+                            <ActivityIndicator size="small" color={theme.colors.primary} />
+                            <Text style={styles.exportButtonTopText}>Generating...</Text>
+                        </View>
+                    ) : (
+                        <Text style={styles.exportButtonTopText}>Export Report</Text>
+                    )}
                 </TouchableOpacity>
                 {!isValidLoanData() && (
                     <View style={styles.errorIndicator}>
@@ -458,75 +593,48 @@ export default function LoanOverviewScreen() {
                 )}
             </View>
 
-            {/* Loan name input */}
-            <View style={loanName.trim() === '' ? styles.fieldError : null}>
-                <InputField
-                    label="💼 Loan Name"
-                    value={loanName}
-                    onChangeText={(value) => { setLoanName(value); triggerAutoSave(); }}
-                    placeholder="e.g., Car Loan, Mortgage, Student Loan"
-                />
-            </View>
+            {/* Loan Details Card - Read-only display */}
+            <View style={styles.detailsCard}>
+                <View style={styles.detailsHeader}>
+                    <Text style={styles.detailsTitle}>Loan Details</Text>
+                    <TouchableOpacity style={styles.editButton} onPress={openEditModal}>
+                        <Text style={styles.editButtonText}>✏️ Edit</Text>
+                    </TouchableOpacity>
+                </View>
+                
+                <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>💼 Loan Name</Text>
+                    <Text style={styles.detailValue}>{loanName || 'N/A'}</Text>
+                </View>
 
-            {/* Loan amount input */}
-            <View style={(loanAmount.trim() === '' || isNaN(parseFloat(loanAmount)) || parseFloat(loanAmount) <= 0) ? styles.fieldError : null}>
-                <InputField
-                    label="💵 Loan Amount"
-                    value={loanAmount}
-                    onChangeText={(value) => { setLoanAmount(value); triggerAutoSave(); }}
-                    placeholder="Enter loan amount"
-                    keyboardType="numeric"
-                    formatNumber={true}
-                />
-            </View>
+                <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>💵 Loan Amount</Text>
+                    <Text style={styles.detailValue}>{formatCurrency(parseFloat(loanAmount) || 0, currency)}</Text>
+                </View>
 
-            {/* Interest rate input */}
-            <View style={(interestRate.trim() === '' || isNaN(parseFloat(interestRate)) || parseFloat(interestRate) < 0) ? styles.fieldError : null}>
-                <InputField
-                    label="📈 Interest Rate (%)"
-                    value={interestRate}
-                    onChangeText={(value) => { setInterestRate(value); triggerAutoSave(); }}
-                    placeholder="Enter interest rate"
-                    keyboardType="numeric"
-                />
-            </View>
+                <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>📈 Interest Rate</Text>
+                    <Text style={styles.detailValue}>{interestRate}%</Text>
+                </View>
 
-            {/* Term input with months/years toggle */}
-            <View style={(term.trim() === '' || isNaN(parseFloat(term)) || parseFloat(term) <= 0) ? styles.fieldError : null}>
-                <TermSelector
-                    term={term}
-                    onTermChange={(value) => { setTerm(value); triggerAutoSave(); }}
-                    termUnit={termUnit}
-                    onTermUnitChange={(value) => { setTermUnit(value); triggerAutoSave(); }}
-                />
-            </View>
+                <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>⏱️ Term</Text>
+                    <Text style={styles.detailValue}>{term} {termUnit}</Text>
+                </View>
 
-            {/* Start date picker */}
-            <View>
-                <Text style={styles.dateLabel}>📅 Starting Date</Text>
-                <TouchableOpacity 
-                    style={styles.dateButton}
-                    onPress={() => setShowDatePicker(true)}
-                >
-                    <Text style={styles.dateButtonText}>{formatDateDisplay()}</Text>
-                </TouchableOpacity>
+                <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>📅 Starting Date</Text>
+                    <Text style={styles.detailValue}>{formatDateDisplay()}</Text>
+                </View>
             </View>
-
-            {/* Date Picker */}
-            <DatePicker
-                visible={showDatePicker}
-                value={date}
-                onChange={onDateChange}
-                onClose={() => setShowDatePicker(false)}
-            />
 
             {/* Show payment summary if calculation is complete */}
             {monthlyPayment > 0 && (
                 <PaymentSummary
-                    monthlyPayment={monthlyPayment}
+                    monthlyPayment={paymentSchedule.length > 0 && monthsElapsed < paymentSchedule.length ? (paymentSchedule[monthsElapsed]?.payment || monthlyPayment) : monthlyPayment}
                     totalPayment={actualTotalPayment}
                     loanAmount={loanAmount}
-                    remainingBalance={calculateRemainingPrincipal()}
+                    remainingBalance={remainingPrincipal}
                 />
             )}
 
@@ -661,11 +769,113 @@ export default function LoanOverviewScreen() {
             )}
             </ScrollView>
         </TouchableWithoutFeedback>
+        )}
+
+        {/* Edit Modal */}
+        <EditModal
+            visible={isEditModalOpen}
+            onClose={cancelEditModal}
+            title="Edit Loan Details"
+            variant="centered"
+            footer={
+                <>
+                    <TouchableOpacity style={styles.modalCancelButton} onPress={cancelEditModal}>
+                        <Text style={styles.modalCancelButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.modalSaveButton} onPress={closeEditModal}>
+                        <Text style={styles.modalSaveButtonText}>Save</Text>
+                    </TouchableOpacity>
+                </>
+            }
+        >
+            <>
+                        {draftData && (
+                            <>
+                        {/* Loan name input */}
+                        <View style={draftData.loanName.trim() === '' ? styles.fieldError : null}>
+                            <InputField
+                                label="💼 Loan Name"
+                                value={draftData.loanName}
+                                onChangeText={(val) => setDraftData({ ...draftData, loanName: val })}
+                                placeholder="e.g., Car Loan, Mortgage, Student Loan"
+                            />
+                        </View>
+
+                        {/* Loan amount input */}
+                        <View style={(draftData.loanAmount.trim() === '' || isNaN(parseFloat(draftData.loanAmount)) || parseFloat(draftData.loanAmount) <= 0) ? styles.fieldError : null}>
+                            <InputField
+                                label="💵 Loan Amount"
+                                value={draftData.loanAmount}
+                                onChangeText={(val) => setDraftData({ ...draftData, loanAmount: val })}
+                                placeholder="Enter loan amount"
+                                keyboardType="numeric"
+                                formatNumber={true}
+                            />
+                        </View>
+
+                        {/* Interest rate input */}
+                        <View style={(draftData.interestRate.trim() === '' || isNaN(parseFloat(draftData.interestRate)) || parseFloat(draftData.interestRate) < 0) ? styles.fieldError : null}>
+                            <InputField
+                                label="📈 Interest Rate (%)"
+                                value={draftData.interestRate}
+                                onChangeText={(val) => setDraftData({ ...draftData, interestRate: val })}
+                                placeholder="Enter interest rate"
+                                keyboardType="numeric"
+                            />
+                        </View>
+
+                        {/* Term input with months/years toggle */}
+                        <View style={(draftData.term.trim() === '' || isNaN(parseFloat(draftData.term)) || parseFloat(draftData.term) <= 0) ? styles.fieldError : null}>
+                            <TermSelector
+                                term={draftData.term}
+                                onTermChange={(val) => setDraftData({ ...draftData, term: val })}
+                                termUnit={draftData.termUnit}
+                                onTermUnitChange={(val) => setDraftData({ ...draftData, termUnit: val })}
+                            />
+                        </View>
+
+                        {/* Start date picker */}
+                        <View>
+                            <Text style={styles.dateLabel}>📅 Starting Date</Text>
+                            <TouchableOpacity 
+                                style={styles.dateButton}
+                                onPress={() => setShowDraftDatePicker(true)}
+                            >
+                                <Text style={styles.dateButtonText}>
+                                    {`${String(draftData.date.getMonth() + 1).padStart(2, '0')}/${String(draftData.date.getDate()).padStart(2, '0')}/${draftData.date.getFullYear()}`}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Date Picker for draft */}
+                        <DatePicker
+                            visible={showDraftDatePicker}
+                            value={draftData.date}
+                            onChange={onDraftDateChange}
+                            onClose={() => setShowDraftDatePicker(false)}
+                        />
+                            </>
+                        )}
+            </>
+        </EditModal>
     </KeyboardAvoidingView>;
 }
 
 // Styles for the loan overview screen
 const styles = StyleSheet.create({
+    // Loading screen
+    loadingScreen: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: theme.colors.surface,
+        gap: theme.spacing.lg,
+    },
+    loadingText: {
+        fontSize: theme.fontSize.base,
+        color: theme.colors.textSecondary,
+        marginTop: theme.spacing.md,
+    },
     // Main scrollable container
     container: {
         flex: 1,
@@ -694,6 +904,14 @@ const styles = StyleSheet.create({
         color: theme.colors.primary,
         fontSize: theme.fontSize.base,
         fontWeight: theme.fontWeight.semibold,
+    },
+    exportButtonDisabled: {
+        opacity: 0.5,
+    },
+    loadingContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: theme.spacing.sm,
     },
     // Error indicator
     errorIndicator: {
@@ -969,6 +1187,84 @@ const styles = StyleSheet.create({
     },
     manageRatesButtonText: {
         color: theme.colors.warning,
+        fontSize: theme.fontSize.base,
+        fontWeight: theme.fontWeight.semibold,
+    },
+    // Details card styles
+    detailsCard: {
+        backgroundColor: theme.colors.surfaceGlass,
+        borderRadius: theme.borderRadius.lg,
+        borderWidth: 1,
+        borderColor: theme.colors.glassBorder,
+        padding: theme.spacing.lg,
+        marginBottom: theme.spacing.xl,
+        ...theme.shadows.glass,
+    },
+    detailsHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: theme.spacing.lg,
+        paddingBottom: theme.spacing.md,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.glassBorder,
+    },
+    detailsTitle: {
+        fontSize: theme.fontSize.xl,
+        fontWeight: theme.fontWeight.bold,
+        color: theme.colors.textPrimary,
+    },
+    editButton: {
+        backgroundColor: theme.colors.primary,
+        paddingHorizontal: theme.spacing.md,
+        paddingVertical: theme.spacing.sm,
+        borderRadius: theme.borderRadius.md,
+    },
+    editButtonText: {
+        color: theme.colors.textInverse,
+        fontSize: theme.fontSize.sm,
+        fontWeight: theme.fontWeight.semibold,
+    },
+    detailRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: theme.spacing.sm,
+    },
+    detailLabel: {
+        fontSize: theme.fontSize.base,
+        color: theme.colors.textSecondary,
+        fontWeight: theme.fontWeight.medium,
+    },
+    detailValue: {
+        fontSize: theme.fontSize.base,
+        color: theme.colors.textPrimary,
+        fontWeight: theme.fontWeight.semibold,
+    },
+    // Modal footer button styles (used by EditModal)
+    modalCancelButton: {
+        flex: 1,
+        backgroundColor: theme.colors.surfaceGlass,
+        borderWidth: 1,
+        borderColor: theme.colors.glassBorder,
+        padding: theme.spacing.md,
+        borderRadius: theme.borderRadius.md,
+        alignItems: 'center',
+    },
+    modalCancelButtonText: {
+        color: theme.colors.textPrimary,
+        fontSize: theme.fontSize.base,
+        fontWeight: theme.fontWeight.semibold,
+    },
+    modalSaveButton: {
+        flex: 1,
+        backgroundColor: theme.colors.primary,
+        padding: theme.spacing.md,
+        borderRadius: theme.borderRadius.md,
+        alignItems: 'center',
+    },
+    modalSaveButtonText: {
+        color: theme.colors.textInverse,
         fontSize: theme.fontSize.base,
         fontWeight: theme.fontWeight.semibold,
     },

@@ -1,7 +1,7 @@
 // Import necessary components and hooks from React Native and Expo Router
 import { Link, useFocusEffect, useRouter } from "expo-router";
-import { useState, useCallback } from "react";
-import { Text, View, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, Image, Platform } from "react-native";
+import { useState, useCallback, useMemo } from "react";
+import { Text, View, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, Image, Platform, ActivityIndicator } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -30,6 +30,17 @@ type Loan = {
     totalPayment: number;
     createdAt: string;
     scheduledNotificationIds?: string[];
+    currentMonthlyPayment?: number;
+    remainingBalance?: number;
+    freedomDate?: string | null;
+    rateAdjustments?: Array<{ month: string; newRate: string }>;
+    earlyPayments?: Array<{ 
+        name?: string;
+        type: 'one-time' | 'recurring';
+        amount: number;
+        month: string;
+        frequency?: string;
+    }>;
 };
 
 export default function DashboardScreen() {
@@ -39,6 +50,7 @@ export default function DashboardScreen() {
     const [showOnboarding, setShowOnboarding] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
     const [currency, setCurrency] = useState<Currency>({ code: 'USD', symbol: '$', name: 'US Dollar', position: 'before' });
+    const [isExportingPortfolio, setIsExportingPortfolio] = useState(false);
     const router = useRouter();
 
     // Function to load loans from device storage
@@ -119,6 +131,7 @@ export default function DashboardScreen() {
                 {
                     text: "Export All", 
                     onPress: () => {
+                        setIsExportingPortfolio(true);
                         // Wrap in setTimeout to isolate from UI thread
                         setTimeout(async () => {
                             try {
@@ -133,14 +146,26 @@ export default function DashboardScreen() {
                                     totalPayment: totalRemaining,
                                     payments: loans.map((loan, index) => {
                                         const termInMonths = loan.term * (loan.termUnit === 'years' ? 12 : 1);
-                                        const totalInterest = (loan.monthlyPayment * termInMonths) - loan.amount;
+                                        const totalPayment = loan.monthlyPayment * termInMonths;
+                                        const totalInterest = totalPayment - loan.amount;
+                                        const remaining = loan.remainingBalance ?? calculateRemainingPrincipal(loan);
+                                        const currentRate = getCurrentInterestRate(loan);
                                         
                                         return {
                                             number: index + 1,
                                             principal: loan.amount, // Original loan amount
-                                            interest: totalInterest, // Total interest over life of loan
-                                            balance: loan.monthlyPayment, // Using balance field to store monthly payment for portfolio
-                                            date: `${loan.name || `Loan ${index + 1}`} | ${loan.interestRate}% | ${loan.term}${loan.termUnit.charAt(0)}`
+                                            interest: remaining, // Remaining balance
+                                            balance: loan.currentMonthlyPayment ?? loan.monthlyPayment, // Current monthly payment
+                                            date: loan.name || `Loan ${index + 1}`, // Loan name
+                                            // Additional portfolio-specific fields
+                                            loanName: loan.name || `Loan ${index + 1}`,
+                                            interestRate: currentRate,
+                                            term: `${loan.term}${loan.termUnit.charAt(0)}`,
+                                            totalInterest: totalInterest,
+                                            startDate: loan.startDate,
+                                            freedomDate: loan.freedomDate,
+                                            earlyPayments: loan.earlyPayments && Array.isArray(loan.earlyPayments) ? loan.earlyPayments : undefined,
+                                            rateAdjustments: loan.rateAdjustments && Array.isArray(loan.rateAdjustments) ? loan.rateAdjustments : undefined
                                         };
                                     })
                                 };
@@ -159,16 +184,17 @@ export default function DashboardScreen() {
                                     encoding: 'base64',
                                 });
                                 
-                                // Share - completely isolated with try-catch
-                                try {
-                                    await Sharing.shareAsync(uri, { 
-                                        mimeType: 'application/pdf',
-                                        dialogTitle: 'Share Loan Portfolio Summary'
-                                    });
-                                } catch {
-                                    // Silently ignore all share errors including dismissals
-                                }
+                                // Reset loading state before sharing (share dialog might be cancelled)
+                                setIsExportingPortfolio(false);
+                                
+                                // Share - this may throw if user cancels, but loading state already reset
+                                await Sharing.shareAsync(uri, { 
+                                    mimeType: 'application/pdf',
+                                    dialogTitle: 'Share Loan Portfolio Summary'
+                                });
                             } catch (error) {
+                                // Ensure loading state is reset even if error occurs
+                                setIsExportingPortfolio(false);
                                 // Only show alert for actual PDF generation errors
                                 if (error instanceof Error && !error.message.includes('cancel')) {
                                     Alert.alert("Error", "Failed to generate PDF");
@@ -208,7 +234,36 @@ export default function DashboardScreen() {
 
     // Calculate total loan statistics
     const totalBorrowed = loans.reduce((sum, loan) => sum + loan.amount, 0);
-    const totalMonthlyPayment = loans.reduce((sum, loan) => sum + loan.monthlyPayment, 0);
+    const totalMonthlyPayment = loans.reduce((sum, loan) => sum + (loan.currentMonthlyPayment ?? loan.monthlyPayment), 0);
+    
+    // Function to get current interest rate considering rate adjustments
+    const getCurrentInterestRate = (loan: Loan): number => {
+        if (!loan.rateAdjustments || loan.rateAdjustments.length === 0) {
+            return loan.interestRate;
+        }
+
+        // Calculate months elapsed since loan start
+        const startDate = new Date(loan.startDate);
+        const currentDate = new Date();
+        const monthsElapsed = Math.max(0,
+            (currentDate.getFullYear() - startDate.getFullYear()) * 12 +
+            (currentDate.getMonth() - startDate.getMonth())
+        ) + 1; // +1 because first payment is month 1
+
+        // Find the most recent rate adjustment that has occurred
+        let currentRate = loan.interestRate;
+        for (const adjustment of loan.rateAdjustments) {
+            const adjustmentMonth = parseInt(adjustment.month);
+            if (!isNaN(adjustmentMonth) && adjustmentMonth <= monthsElapsed) {
+                const newRate = parseFloat(adjustment.newRate);
+                if (!isNaN(newRate)) {
+                    currentRate = newRate;
+                }
+            }
+        }
+
+        return currentRate;
+    };
     
     // Calculate remaining principal for all loans
     const calculateRemainingPrincipal = (loan: Loan): number => {
@@ -235,7 +290,7 @@ export default function DashboardScreen() {
         return Math.max(0, remaining);
     };
     
-    const totalRemaining = loans.reduce((sum, loan) => sum + calculateRemainingPrincipal(loan), 0);
+    const totalRemaining = loans.reduce((sum, loan) => sum + (loan.remainingBalance ?? calculateRemainingPrincipal(loan)), 0);
 
     // Generate colors for pie charts
     const pieColors = [
@@ -251,24 +306,33 @@ export default function DashboardScreen() {
         '#FF8B94'  // Pink
     ];
 
-    // Prepare data for pie charts
-    const totalBorrowedData = loans.map((loan, index) => ({
-        value: loan.amount,
-        color: pieColors[index % pieColors.length],
-        label: loan.name || `Loan ${index + 1}`
-    }));
+    // Memoize pie chart data to prevent recalculating on every render
+    const totalBorrowedData = useMemo(() => 
+        loans.map((loan, index) => ({
+            value: loan.amount,
+            color: pieColors[index % pieColors.length],
+            label: loan.name || `Loan ${index + 1}`
+        })),
+        [loans]
+    );
 
-    const remainingData = loans.map((loan, index) => ({
-        value: calculateRemainingPrincipal(loan),
-        color: pieColors[index % pieColors.length],
-        label: loan.name || `Loan ${index + 1}`
-    }));
+    const remainingData = useMemo(() => 
+        loans.map((loan, index) => ({
+            value: loan.remainingBalance ?? calculateRemainingPrincipal(loan),
+            color: pieColors[index % pieColors.length],
+            label: loan.name || `Loan ${index + 1}`
+        })),
+        [loans]
+    );
 
-    const monthlyPaymentData = loans.map((loan, index) => ({
-        value: loan.monthlyPayment,
-        color: pieColors[index % pieColors.length],
-        label: loan.name || `Loan ${index + 1}`
-    }));
+    const monthlyPaymentData = useMemo(() => 
+        loans.map((loan, index) => ({
+            value: loan.currentMonthlyPayment ?? loan.monthlyPayment,
+            color: pieColors[index % pieColors.length],
+            label: loan.name || `Loan ${index + 1}`
+        })),
+        [loans]
+    );
 
     return (
         <View style={styles.wrapper}>
@@ -307,7 +371,7 @@ export default function DashboardScreen() {
                     </View>
                 </View>
                 <View style={styles.summaryCard}>
-                    <Text style={styles.summaryLabel}>Remaining</Text>
+                    <Text style={styles.summaryLabel}>Remaining Principal</Text>
                     <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{formatCurrency(totalRemaining, currency)}</Text>
                     <View style={styles.pieChartWrapper}>
                         <PieChart data={remainingData} size={120} strokeWidth={15} />
@@ -400,7 +464,7 @@ export default function DashboardScreen() {
                                     <Text style={styles.loanAmount}>{formatCurrency(loan.amount, currency, 0)}</Text>
                                     {!isExpanded && (
                                         <Text style={styles.loanSubtitle}>
-                                            {formatCurrency(loan.monthlyPayment, currency)}/month • {loan.term} {loan.termUnit}
+                                            {formatCurrency(loan.currentMonthlyPayment ?? loan.monthlyPayment, currency)}/month • {loan.term} {loan.termUnit}
                                         </Text>
                                     )}
                                 </View>
@@ -436,12 +500,12 @@ export default function DashboardScreen() {
                             <Link href={`/(tabs)/${loan.id}/overview`} asChild>
                                 <TouchableOpacity activeOpacity={0.7}>
                                     <View style={styles.expandedContent}>
-                                        <Text style={styles.loanSubtitle}>{loan.term} {loan.termUnit} @ {loan.interestRate}%</Text>
+                                        <Text style={styles.loanSubtitle}>{loan.term} {loan.termUnit} @ {getCurrentInterestRate(loan)}%</Text>
                                         
-                                        {/* Monthly payment highlight */}
+                                        {/* Current Monthly payment highlight */}
                                         <View style={styles.paymentHighlight}>
-                                            <Text style={styles.paymentLabel}>Monthly Payment</Text>
-                                            <Text style={styles.paymentValue}>{formatCurrency(loan.monthlyPayment, currency)}</Text>
+                                            <Text style={styles.paymentLabel}>Current Monthly Payment</Text>
+                                            <Text style={styles.paymentValue}>{formatCurrency(loan.currentMonthlyPayment ?? loan.monthlyPayment, currency)}</Text>
                                         </View>
                                         
                                         {/* Loan details section */}
@@ -450,9 +514,17 @@ export default function DashboardScreen() {
                                                 <Text style={styles.detailLabel}>Start Date</Text>
                                                 <Text style={styles.detailValue}>{new Date(loan.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</Text>
                                             </View>
+                                            {loan.freedomDate && (
+                                                <View style={styles.detailRow}>
+                                                    <Text style={styles.detailLabel}>🎊 Freedom Day</Text>
+                                                    <Text style={[styles.detailValue, { color: theme.colors.success }]}>
+                                                        {new Date(loan.freedomDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                                                    </Text>
+                                                </View>
+                                            )}
                                             <View style={styles.detailRow}>
                                                 <Text style={styles.detailLabel}>Remaining Balance</Text>
-                                                <Text style={[styles.detailValue, { color: theme.colors.primary }]}>{formatCurrency(calculateRemainingPrincipal(loan), currency, 0)}</Text>
+                                                <Text style={[styles.detailValue, { color: theme.colors.primary }]}>{formatCurrency(loan.remainingBalance ?? calculateRemainingPrincipal(loan), currency, 0)}</Text>
                                             </View>
                                             <View style={styles.detailRow}>
                                                 <Text style={styles.detailLabel}>Total Payment</Text>
@@ -503,15 +575,24 @@ export default function DashboardScreen() {
                     
                     {loans.length > 0 && (
                         <TouchableOpacity 
-                            style={styles.menuItem}
+                            style={[styles.menuItem, isExportingPortfolio && styles.menuItemDisabledState]}
                             onPress={() => {
-                                setShowSettings(false);
-                                exportAllLoansPDF();
+                                if (!isExportingPortfolio) {
+                                    setShowSettings(false);
+                                    exportAllLoansPDF();
+                                }
                             }}
+                            disabled={isExportingPortfolio}
                         >
-                            <Text style={styles.menuIcon}>📄</Text>
+                            {isExportingPortfolio ? (
+                                <ActivityIndicator size="small" color={theme.colors.primary} style={styles.menuIcon} />
+                            ) : (
+                                <Text style={styles.menuIcon}>📄</Text>
+                            )}
                             <View style={styles.menuTextContainer}>
-                                <Text style={styles.menuText}>Export Portfolio</Text>
+                                <Text style={styles.menuText}>
+                                    {isExportingPortfolio ? 'Generating...' : 'Export Portfolio'}
+                                </Text>
                                 <Text style={styles.menuSubtext}>Download PDF report of all loans</Text>
                             </View>
                         </TouchableOpacity>
@@ -935,6 +1016,9 @@ const styles = StyleSheet.create({
     menuItemDanger: {
         borderColor: 'rgba(239, 68, 68, 0.3)',
         backgroundColor: 'rgba(239, 68, 68, 0.05)',
+    },
+    menuItemDisabledState: {
+        opacity: 0.5,
     },
     menuIcon: {
         fontSize: 24,

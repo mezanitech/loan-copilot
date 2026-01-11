@@ -81,7 +81,7 @@ export function calculatePayment({ principal, annualRate, termInMonths }: LoanPa
  * @param earlyPayments - Array of early payment configurations
  * @returns Total early payment amount for this month
  */
-function getEarlyPaymentsForMonth(month: number, earlyPayments: EarlyPayment[]): number {
+export function getEarlyPaymentsForMonth(month: number, earlyPayments: EarlyPayment[]): number {
     let totalEarlyPayment = 0;
 
     earlyPayments.forEach(payment => {
@@ -172,13 +172,22 @@ export function generatePaymentSchedule({
     // Sort rate adjustments by month
     const sortedRateAdjustments = [...rateAdjustments].sort((a, b) => a.month - b.month);
 
-    // Initialize with starting values
+    // Initialize with starting rate
     let currentRate = annualRate;
     let monthlyRate = currentRate / 100 / 12;
-    let monthlyPayment = calculatePayment({ principal, annualRate: currentRate, termInMonths }).monthlyPayment;
 
     const schedule: PaymentDetail[] = [];
     let balance = principal;
+
+    // Calculate INITIAL monthly payment (month 1) using original principal and term
+    let monthlyPayment = calculatePayment({
+        principal: principal,
+        annualRate: currentRate,
+        termInMonths: termInMonths
+    }).monthlyPayment;
+
+    // Track remaining months throughout the loop
+    let remainingMonths = termInMonths;
 
     // Generate payment details for each month
     for (let i = 0; i < termInMonths; i++) {
@@ -187,56 +196,76 @@ export function generatePaymentSchedule({
 
         const currentMonth = i + 1; // 1-indexed month number
 
-        // Check if rate adjusts this month
-        const rateChange = sortedRateAdjustments.find(adj => adj.month === currentMonth);
-        if (rateChange) {
-            // Save old rate before changing
-            const oldRate = currentRate;
+        // STEP 1: Check for early payment BEFORE processing regular payment
+        const earlyPaymentAmount = getEarlyPaymentsForMonth(currentMonth, earlyPayments);
+        if (earlyPaymentAmount > 0) {
+            console.log(`Month ${currentMonth}: Processing early payment of ${earlyPaymentAmount} BEFORE regular payment`);
+            console.log(`  Balance BEFORE early payment: ${balance.toFixed(2)}`);
             
-            // Update to new rate
-            currentRate = rateChange.newRate;
-            monthlyRate = currentRate / 100 / 12;
-
-            // Calculate projected payoff month using OLD rate (current trajectory before rate change)
+            // Calculate interest on current balance with current rate
+            const earlyPaymentInterest = balance * monthlyRate;
+            
+            // Apply early payment principal (early payment - interest on that early payment's portion)
+            const earlyPaymentPrincipal = Math.min(earlyPaymentAmount, balance);
+            balance -= earlyPaymentPrincipal;
+            
+            console.log(`  Balance AFTER early payment: ${balance.toFixed(2)}`);
+            
+            // Recalculate remaining months by projecting payoff with current monthly payment
             const projectedPayoffMonth = calculateProjectedPayoffMonth(
                 currentMonth,
                 balance,
                 monthlyPayment,
-                oldRate, // Use OLD rate to determine current trajectory
-                earlyPayments
+                currentRate,
+                [] // No future early payments in projection - we already applied this one
             );
+            
+            remainingMonths = Math.max(1, projectedPayoffMonth - currentMonth + 1);
+            console.log(`  Projected payoff month: ${projectedPayoffMonth}, remaining months: ${remainingMonths}`);
+        }
 
-            // Calculate remaining months from current trajectory
-            const remainingMonths = Math.max(1, projectedPayoffMonth - currentMonth + 1);
-
-            // Recalculate monthly payment with NEW rate to maintain the same trajectory
+        // STEP 2: Check if rate adjusts this month
+        const rateChange = sortedRateAdjustments.find(adj => adj.month === currentMonth);
+        if (rateChange) {
+            console.log(`Month ${currentMonth}: Rate change from ${currentRate}% to ${rateChange.newRate}%`);
+            
+            // Detect if both early payment and rate change happen same month
+            if (earlyPaymentAmount > 0) {
+                console.log(`  ⚠️ SCENARIO DETECTED: Both early payment AND rate change in month ${currentMonth}`);
+            }
+            
+            // Update to new rate
+            currentRate = rateChange.newRate;
+            monthlyRate = currentRate / 100 / 12;
+            
+            // STEP 3: Recalculate monthly payment ONLY when rate changes
+            // (balance may have been reduced by early payment, rate has changed)
             monthlyPayment = calculatePayment({
                 principal: balance,
                 annualRate: currentRate,
                 termInMonths: remainingMonths
             }).monthlyPayment;
+            
+            console.log(`  New monthly payment: ${monthlyPayment.toFixed(2)}`);
         }
 
-        // Interest is calculated on remaining balance with current rate
+        // STEP 4: Process regular monthly payment
         const interestPayment = balance * monthlyRate;
-        let totalPayment = monthlyPayment;
-
-        // Add all applicable early payments for this month
-        totalPayment += getEarlyPaymentsForMonth(currentMonth, earlyPayments);
-
-        // Calculate principal payment (can't exceed remaining balance)
-        const principalPayment = Math.min(totalPayment - interestPayment, balance);
+        const principalPayment = Math.min(monthlyPayment - interestPayment, balance);
         balance -= principalPayment;
+
+        // Decrement remaining months for next iteration
+        remainingMonths = Math.max(1, remainingMonths - 1);
 
         // Calculate payment date (add i months to start date)
         const paymentDate = new Date(startDate);
         paymentDate.setMonth(startDate.getMonth() + i);
 
-        // Push payment details into schedule array
+        // STEP 5: Record this month in the schedule (early payment is NOT shown, only regular payment)
         schedule.push({
             paymentNumber: i + 1,
             date: paymentDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
-            payment: interestPayment + principalPayment,
+            payment: monthlyPayment + earlyPaymentAmount, // Include early payment in total
             principal: principalPayment,
             interest: interestPayment,
             balance: Math.max(0, balance),

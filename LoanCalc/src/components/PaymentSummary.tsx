@@ -48,7 +48,7 @@ export default function PaymentSummary({ monthlyPayment, totalPayment, loanAmoun
                 {remainingBalance !== undefined && (
                     <View style={styles.row}>
                         <Text style={styles.label}>💳 Remaining Balance</Text>
-                        <Text style={[styles.value, { color: theme.colors.primary }]}>{formatCurrency(remainingBalance, currency, 0)}</Text>
+                        <Text style={[styles.value, { color: theme.colors.primary }]}>{formatCurrency(remainingBalance, currency)}</Text>
                     </View>
                 )}
                 <View style={styles.row}>

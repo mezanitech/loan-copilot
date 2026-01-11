@@ -13,6 +13,7 @@ type PaymentDetailCardProps = {
     balance: number;
     interestRate?: number;
     rateChanged?: boolean;
+    isCurrentPayment?: boolean;
 };
 
 export default function PaymentDetailCard({ 
@@ -23,7 +24,8 @@ export default function PaymentDetailCard({
     interest, 
     balance,
     interestRate,
-    rateChanged
+    rateChanged,
+    isCurrentPayment
 }: PaymentDetailCardProps) {
     const [currency, setCurrency] = useState<Currency>({ code: 'USD', symbol: '$', name: 'US Dollar', position: 'before' });
 
@@ -36,9 +38,11 @@ export default function PaymentDetailCard({
         setCurrency(curr);
     };
     return (
-        <View style={styles.card}>
+        <View style={[styles.card, isCurrentPayment && styles.currentCard]}>
             <View style={styles.header}>
-                <Text style={styles.paymentNumber}>Payment #{paymentNumber}</Text>
+                <Text style={styles.paymentNumber}>
+                    {isCurrentPayment && '▶️ '}Payment #{paymentNumber}{isCurrentPayment && ' (Current)'}
+                </Text>
                 <Text style={styles.date}>{date}</Text>
             </View>
             {rateChanged && interestRate !== undefined && (
@@ -85,6 +89,12 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: theme.colors.gray200,
         ...theme.shadows.sm,
+    },
+    currentCard: {
+        borderWidth: 2,
+        borderColor: theme.colors.primary,
+        backgroundColor: theme.colors.surfaceGlass,
+        ...theme.shadows.md,
     },
     header: {
         flexDirection: "row",

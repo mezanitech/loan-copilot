@@ -100,10 +100,28 @@ export default function LoanScheduleScreen() {
         rateAdjustments: getRateAdjustmentsForCalc()
     });
     
-    // Show first 5 and last 5 payments when collapsed, all when expanded
+    // Calculate current payment number based on months elapsed
+    const monthsElapsed = Math.max(0, Math.floor((new Date().getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24 * 30.44)));
+    const currentPaymentIndex = Math.min(monthsElapsed, paymentSchedule.length - 1);
+    
+    // Show first 5, current payment (if not already shown), and last 5 payments when collapsed
     const displayedPayments = showAllPayments || paymentSchedule.length <= 10
         ? paymentSchedule
-        : [...paymentSchedule.slice(0, 5), ...paymentSchedule.slice(-5)];
+        : (() => {
+            const firstFive = paymentSchedule.slice(0, 5);
+            const lastFive = paymentSchedule.slice(-5);
+            
+            // Check if current payment is already in first 5 or last 5
+            const isInFirstFive = currentPaymentIndex < 5;
+            const isInLastFive = currentPaymentIndex >= paymentSchedule.length - 5;
+            
+            if (isInFirstFive || isInLastFive || monthsElapsed === 0) {
+                return [...firstFive, ...lastFive];
+            }
+            
+            // Insert current payment between first and last
+            return [...firstFive, paymentSchedule[currentPaymentIndex], ...lastFive];
+        })();
 
     return (
         <ScrollView style={styles.container}>
@@ -120,12 +138,30 @@ export default function LoanScheduleScreen() {
                                 principal={payment.principal}
                                 interest={payment.interest}
                                 balance={payment.balance}
+                                isCurrentPayment={payment.paymentNumber === currentPaymentIndex + 1}
                             />
-                            {/* Show separator (...) between first 5 and last 5 payments */}
-                            {!showAllPayments && index === 4 && paymentSchedule.length > 10 && (
-                                <View style={styles.separator}>
-                                    <Text style={styles.separatorText}>⋮</Text>
-                                </View>
+                            {/* Show separator (...) between sections */}
+                            {!showAllPayments && (
+                                <>
+                                    {/* After first 5 */}
+                                    {index === 4 && paymentSchedule.length > 10 && currentPaymentIndex >= 5 && currentPaymentIndex < paymentSchedule.length - 5 && (
+                                        <View style={styles.separator}>
+                                            <Text style={styles.separatorText}>⋮</Text>
+                                        </View>
+                                    )}
+                                    {/* After current payment (if shown separately) */}
+                                    {index === 5 && paymentSchedule.length > 10 && currentPaymentIndex >= 5 && currentPaymentIndex < paymentSchedule.length - 5 && (
+                                        <View style={styles.separator}>
+                                            <Text style={styles.separatorText}>⋮</Text>
+                                        </View>
+                                    )}
+                                    {/* Between first and last when no current payment shown */}
+                                    {index === 4 && paymentSchedule.length > 10 && (currentPaymentIndex < 5 || currentPaymentIndex >= paymentSchedule.length - 5 || monthsElapsed === 0) && (
+                                        <View style={styles.separator}>
+                                            <Text style={styles.separatorText}>⋮</Text>
+                                        </View>
+                                    )}
+                                </>
                             )}
                         </View>
                     ))}

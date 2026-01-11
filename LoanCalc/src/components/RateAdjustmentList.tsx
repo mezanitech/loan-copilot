@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { useState, forwardRef, useImperativeHandle } from "react";
 import InputField from "./InputField";
 import DatePicker from "./DatePicker";
+import EditModal from "./EditModal";
 import { theme } from "../constants/theme";
 
 export type RateAdjustment = {
@@ -31,6 +32,7 @@ export const isValidRateAdjustment = (adjustment: RateAdjustment, loanTermInMont
 type RateAdjustmentListProps = {
     adjustments: RateAdjustment[];
     onAdjustmentsChange: (adjustments: RateAdjustment[]) => void;
+    onModalClose?: () => void;
     loanStartDate: Date;
     loanTermInMonths: number;
 };
@@ -40,12 +42,13 @@ export type RateAdjustmentListRef = {
 };
 
 const RateAdjustmentList = forwardRef<RateAdjustmentListRef, RateAdjustmentListProps>(
-    ({ adjustments, onAdjustmentsChange, loanStartDate, loanTermInMonths }, ref) => {
+    ({ adjustments, onAdjustmentsChange, onModalClose, loanStartDate, loanTermInMonths }, ref) => {
     const [activeMonthPicker, setActiveMonthPicker] = useState<string | null>(null);
-    const [expandedAdjustments, setExpandedAdjustments] = useState<Set<string>>(new Set());
+    const [editingAdjustment, setEditingAdjustment] = useState<string | null>(null);
+    const [draftAdjustment, setDraftAdjustment] = useState<RateAdjustment | null>(null);
     
     useImperativeHandle(ref, () => ({
-        collapseAll: () => setExpandedAdjustments(new Set())
+        collapseAll: () => setEditingAdjustment(null)
     }));
     
     // Check if a month already has a rate adjustment
@@ -69,50 +72,105 @@ const RateAdjustmentList = forwardRef<RateAdjustmentListRef, RateAdjustmentListP
             month: "2", // Default to month 2 (first allowed month)
             newRate: "",
         };
-        const sortedAdjustments = sortAdjustments([...adjustments, newAdjustment]);
-        onAdjustmentsChange(sortedAdjustments);
-        // Collapse all existing adjustments and expand only the new one
-        setExpandedAdjustments(new Set([newAdjustment.id]));
+        setDraftAdjustment(newAdjustment);
+        // Open modal for the new adjustment
+        setEditingAdjustment(newAdjustment.id);
     };
 
     const removeAdjustment = (id: string) => {
         onAdjustmentsChange(adjustments.filter(a => a.id !== id));
-        // Remove from expanded set
-        const newExpanded = new Set(expandedAdjustments);
-        newExpanded.delete(id);
-        setExpandedAdjustments(newExpanded);
+        // Close modal if this adjustment was being edited
+        if (editingAdjustment === id) {
+            setEditingAdjustment(null);
+            setDraftAdjustment(null);
+        }
+        // Trigger save after deletion
+        if (onModalClose) {
+            setTimeout(() => onModalClose(), 100);
+        }
     };
 
-    const toggleExpand = (id: string) => {
-        const newExpanded = new Set(expandedAdjustments);
-        if (newExpanded.has(id)) {
-            newExpanded.delete(id);
-        } else {
-            newExpanded.add(id);
+    const openEditModal = (id: string) => {
+        // Create a draft copy of the existing adjustment
+        const adjustmentToEdit = adjustments.find(a => a.id === id);
+        if (adjustmentToEdit) {
+            setDraftAdjustment({ ...adjustmentToEdit });
         }
-        setExpandedAdjustments(newExpanded);
+        setEditingAdjustment(id);
+    };
+
+    const closeModal = () => {
+        const adjustment = getCurrentAdjustment();
+        const isDraft = draftAdjustment && editingAdjustment === draftAdjustment.id;
+        const isValid = adjustment && isValidRateAdjustment(adjustment, loanTermInMonths);
+        
+        // If invalid/incomplete, warn user
+        if (!isValid && (isDraft || adjustment)) {
+            Alert.alert(
+                'Incomplete Adjustment',
+                'This rate adjustment is incomplete or invalid and will not be saved. Are you sure you want to close?',
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    { 
+                        text: 'Close Anyway', 
+                        style: 'destructive',
+                        onPress: () => {
+                            if (isDraft) {
+                                setDraftAdjustment(null);
+                            }
+                            setEditingAdjustment(null);
+                            onModalClose?.();
+                        }
+                    }
+                ]
+            );
+            return;
+        }
+        
+        // Apply the draft changes
+        if (adjustment && isValid && draftAdjustment) {
+            // Check if this is a new adjustment or editing existing
+            const existingIndex = adjustments.findIndex(a => a.id === adjustment.id);
+            if (existingIndex >= 0) {
+                // Update existing adjustment
+                const updatedAdjustments = [...adjustments];
+                updatedAdjustments[existingIndex] = adjustment;
+                const sortedAdjustments = sortAdjustments(updatedAdjustments);
+                onAdjustmentsChange(sortedAdjustments);
+            } else {
+                // Add new adjustment
+                const sortedAdjustments = sortAdjustments([...adjustments, adjustment]);
+                onAdjustmentsChange(sortedAdjustments);
+            }
+        }
+        setDraftAdjustment(null);
+        setEditingAdjustment(null);
+        onModalClose?.();
+    };
+
+    const getCurrentAdjustment = (): RateAdjustment | undefined => {
+        if (draftAdjustment && editingAdjustment === draftAdjustment.id) {
+            return draftAdjustment;
+        }
+        return adjustments.find(a => a.id === editingAdjustment);
     };
 
     const updateAdjustment = (id: string, field: keyof RateAdjustment, value: string) => {
-        // If updating month, check for duplicates
-        if (field === 'month') {
-            if (isMonthUsed(value, id)) {
-                Alert.alert(
-                    'Duplicate Month',
-                    'This month already has a rate adjustment. Please choose a different month.',
-                    [{ text: 'OK' }]
-                );
-                return;
+        // Always update the draft state (both for new and existing adjustments)
+        if (draftAdjustment && id === draftAdjustment.id) {
+            // If updating month, check for duplicates
+            if (field === 'month') {
+                if (isMonthUsed(value, id)) {
+                    Alert.alert(
+                        'Duplicate Month',
+                        'This month already has a rate adjustment. Please choose a different month.',
+                        [{ text: 'OK' }]
+                    );
+                    return;
+                }
             }
+            setDraftAdjustment({ ...draftAdjustment, [field]: value });
         }
-
-        const updatedAdjustments = adjustments.map(a => 
-            a.id === id ? { ...a, [field]: value } : a
-        );
-        
-        // Auto-sort after update
-        const sortedAdjustments = sortAdjustments(updatedAdjustments);
-        onAdjustmentsChange(sortedAdjustments);
     };
 
     const handleMonthChange = (event: any, selectedDate: Date | undefined, adjustmentId: string) => {
@@ -127,7 +185,6 @@ const RateAdjustmentList = forwardRef<RateAdjustmentListRef, RateAdjustmentListP
                 updateAdjustment(adjustmentId, "month", totalMonthDiff.toString());
             }
         }
-        setActiveMonthPicker(null);
     };
 
     const getMonthDisplay = (monthStr: string): string => {
@@ -179,91 +236,126 @@ const RateAdjustmentList = forwardRef<RateAdjustmentListRef, RateAdjustmentListP
                 </TouchableOpacity>
             </View>
 
+            {/* Adjustment cards - click to open modal */}
             {adjustments.map((adjustment, index) => {
-                const isExpanded = expandedAdjustments.has(adjustment.id);
                 const isComplete = adjustment.month && adjustment.newRate;
                 const isValid = isValidRateAdjustment(adjustment, loanTermInMonths);
                 
                 return (
-                <View key={adjustment.id} style={[
-                    styles.adjustmentCard,
-                    !isValid && styles.adjustmentCardInvalid
-                ]}>
-                    <TouchableOpacity 
-                        style={styles.cardHeader}
-                        onPress={() => toggleExpand(adjustment.id)}
-                        activeOpacity={0.7}
-                    >
-                        <View style={styles.cardHeaderLeft}>
-                            <Text style={styles.adjustmentNumber}>
-                                {adjustment.name || `Rate Change #${index + 1}`}
+                <TouchableOpacity
+                    key={adjustment.id}
+                    style={[
+                        styles.adjustmentCard,
+                        !isValid && styles.adjustmentCardInvalid
+                    ]}
+                    onPress={() => openEditModal(adjustment.id)}
+                    activeOpacity={0.7}
+                >
+                    <View style={styles.cardHeaderLeft}>
+                        <Text style={styles.adjustmentNumber}>
+                            {adjustment.name || `Rate Change #${index + 1}`}
+                        </Text>
+                        {isComplete && (
+                            <Text style={styles.adjustmentSummary}>
+                                {adjustment.newRate}% • {getMonthDisplay(adjustment.month)}
                             </Text>
-                            {!isExpanded && isComplete && (
-                                <Text style={styles.adjustmentSummary}>
-                                    {adjustment.newRate}% • {getMonthDisplay(adjustment.month)}
-                                </Text>
-                            )}
-                        </View>
-                        <View style={styles.cardHeaderRight}>
-                            <Text style={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</Text>
-                            <TouchableOpacity
-                                style={styles.removeButton}
-                                onPress={(e) => {
-                                    e.stopPropagation();
-                                    removeAdjustment(adjustment.id);
-                                }}
-                            >
-                                <Text style={styles.removeButtonText}>✕</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </TouchableOpacity>
-
-                    {isExpanded && (
-                        <View style={styles.expandedContent}>
-                            {!isValid && (
-                                <View style={styles.validationWarning}>
-                                    <Text style={styles.validationWarningText}>⚠️ Please complete all required fields with valid values (Rate: 0-30%, Month: 2+)</Text>
-                                </View>
-                            )}
-                            <InputField
-                                label="Adjustment Name"
-                                value={adjustment.name || ""}
-                                onChangeText={(value) => updateAdjustment(adjustment.id, "name", value)}
-                                placeholder="e.g., ARM Reset, Refinance"
-                            />
-
-                            <InputField
-                                label="New Interest Rate (%)"
-                                value={adjustment.newRate}
-                                onChangeText={(value) => updateAdjustment(adjustment.id, "newRate", value)}
-                                placeholder="e.g., 5.5"
-                                keyboardType="decimal-pad"
-                            />
-
-                            <View>
-                                <Text style={styles.inputLabel}>Adjustment Month</Text>
-                                <TouchableOpacity
-                                    style={styles.monthPickerButton}
-                                    onPress={() => setActiveMonthPicker(adjustment.id)}
-                                >
-                                    <Text style={styles.monthPickerText}>{getMonthDisplay(adjustment.month)}</Text>
-                                </TouchableOpacity>
-                                {activeMonthPicker === adjustment.id && (
-                                    <DatePicker
-                                        visible={true}
-                                        value={getDateForMonth(adjustment.month)}
-                                        onChange={(event, date) => handleMonthChange(event, date, adjustment.id)}
-                                        onClose={() => setActiveMonthPicker(null)}
-                                        minimumDate={getMinDate()}
-                                        maximumDate={getMaxDate()}
-                                    />
-                                )}
-                            </View>
-                        </View>
-                    )}
-                </View>
+                        )}
+                    </View>
+                </TouchableOpacity>
                 );
             })}
+
+            {/* Edit Adjustment Modal */}
+            {editingAdjustment && (() => {
+                const adjustment = getCurrentAdjustment();
+                if (!adjustment) return null;
+                const isValid = isValidRateAdjustment(adjustment, loanTermInMonths);
+                
+                return (
+                    <EditModal
+                        visible={true}
+                        onClose={closeModal}
+                        title={adjustment.name || 'Edit Rate Change'}
+                        variant="centered"
+                        footer={
+                            <>
+                                {adjustments.some(a => a.id === adjustment.id) && (
+                                    <TouchableOpacity 
+                                        style={styles.deleteButton}
+                                        onPress={() => {
+                                            Alert.alert(
+                                                'Delete Rate Change',
+                                                'Are you sure you want to delete this rate adjustment?',
+                                                [
+                                                    { text: 'Cancel', style: 'cancel' },
+                                                    { 
+                                                        text: 'Delete', 
+                                                        style: 'destructive',
+                                                        onPress: () => {
+                                                            removeAdjustment(adjustment.id);
+                                                        }
+                                                    }
+                                                ]
+                                            );
+                                        }}
+                                    >
+                                        <Text style={styles.deleteButtonText}>Delete</Text>
+                                    </TouchableOpacity>
+                                )}
+                                <TouchableOpacity 
+                                    style={styles.doneButton}
+                                    onPress={closeModal}
+                                >
+                                    <Text style={styles.doneButtonText}>Done</Text>
+                                </TouchableOpacity>
+                            </>
+                        }
+                    >
+                        <>
+                                    {!isValid && (
+                                        <View style={styles.validationWarning}>
+                                            <Text style={styles.validationWarningText}>⚠️ Please complete all required fields with valid values (Rate: 0-30%, Month: 2+)</Text>
+                                        </View>
+                                    )}
+                                    
+                                    <InputField
+                                        label="Adjustment Name"
+                                        value={adjustment.name || ""}
+                                        onChangeText={(value) => updateAdjustment(adjustment.id, "name", value)}
+                                        placeholder="e.g., ARM Reset, Refinance"
+                                    />
+
+                                    <InputField
+                                        label="New Interest Rate (%)"
+                                        value={adjustment.newRate}
+                                        onChangeText={(value) => updateAdjustment(adjustment.id, "newRate", value)}
+                                        placeholder="e.g., 5.5"
+                                        keyboardType="decimal-pad"
+                                    />
+
+                                    <View>
+                                        <Text style={styles.inputLabel}>Adjustment Month</Text>
+                                        <TouchableOpacity
+                                            style={styles.monthPickerButton}
+                                            onPress={() => setActiveMonthPicker(adjustment.id)}
+                                        >
+                                            <Text style={styles.monthPickerText}>{getMonthDisplay(adjustment.month)}</Text>
+                                        </TouchableOpacity>
+                                        {activeMonthPicker === adjustment.id && (
+                                            <DatePicker
+                                                visible={true}
+                                                value={getDateForMonth(adjustment.month)}
+                                                onChange={(event, date) => handleMonthChange(event, date, adjustment.id)}
+                                                onClose={() => setActiveMonthPicker(null)}
+                                                minimumDate={getMinDate()}
+                                                maximumDate={getMaxDate()}
+                                            />
+                                        )}
+                                    </View>
+                        </>
+                    </EditModal>
+                );
+            })()}
         </View>
     );
 });
@@ -303,6 +395,9 @@ const styles = StyleSheet.create({
         marginBottom: theme.spacing.md,
         borderWidth: 1,
         borderColor: theme.colors.gray200,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
     },
     adjustmentCardInvalid: {
         borderWidth: 2,
@@ -322,19 +417,8 @@ const styles = StyleSheet.create({
         fontSize: theme.fontSize.xs,
         fontWeight: theme.fontWeight.medium,
     },
-    cardHeader: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: 0,
-    },
     cardHeaderLeft: {
         flex: 1,
-    },
-    cardHeaderRight: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: theme.spacing.md,
     },
     adjustmentNumber: {
         fontSize: theme.fontSize.base,
@@ -346,13 +430,6 @@ const styles = StyleSheet.create({
         fontSize: theme.fontSize.xs,
         color: theme.colors.textSecondary,
         marginTop: 2,
-    },
-    expandIcon: {
-        fontSize: theme.fontSize.xs,
-        color: theme.colors.textSecondary,
-    },
-    expandedContent: {
-        marginTop: theme.spacing.md,
     },
     removeButton: {
         width: 28,
@@ -386,28 +463,29 @@ const styles = StyleSheet.create({
         fontSize: theme.fontSize.base,
         color: theme.colors.textPrimary,
     },
-    modalOverlay: {
+    // Modal footer button styles (used by EditModal footer prop)
+    deleteButton: {
         flex: 1,
-        justifyContent: 'center',
+        backgroundColor: theme.colors.error,
+        padding: theme.spacing.lg,
+        borderRadius: theme.borderRadius.lg,
         alignItems: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        ...theme.shadows.md,
     },
-    datePickerContainer: {
-        backgroundColor: theme.colors.surface,
-        borderRadius: theme.borderRadius.md,
-        padding: theme.spacing.xl,
-        alignItems: 'center',
+    deleteButtonText: {
+        color: theme.colors.textInverse,
+        fontSize: theme.fontSize.base,
+        fontWeight: theme.fontWeight.semibold,
     },
-    closeButton: {
+    doneButton: {
+        flex: 1,
         backgroundColor: theme.colors.primary,
-        paddingHorizontal: 30,
-        paddingVertical: theme.spacing.md,
-        borderRadius: theme.borderRadius.sm,
-        marginTop: 15,
-        minWidth: 120,
+        padding: theme.spacing.lg,
+        borderRadius: theme.borderRadius.lg,
         alignItems: 'center',
+        ...theme.shadows.md,
     },
-    closeButtonText: {
+    doneButtonText: {
         color: theme.colors.textInverse,
         fontSize: theme.fontSize.base,
         fontWeight: theme.fontWeight.semibold,

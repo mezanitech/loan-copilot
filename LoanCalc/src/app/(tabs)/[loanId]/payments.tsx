@@ -6,6 +6,7 @@ import { theme } from '../../../constants/theme';
 import EarlyPaymentList, { EarlyPayment, EarlyPaymentListRef } from "../../../components/EarlyPaymentList";
 import RateAdjustmentList, { RateAdjustment, RateAdjustmentListRef } from "../../../components/RateAdjustmentList";
 import { AutoSaveIndicator, AutoSaveHandle } from "../../../components/AutoSaveIndicator";
+import { calculatePayment, generatePaymentSchedule } from "../../../utils/loanCalculations";
 
 export default function PaymentsScreen() {
     const params = useGlobalSearchParams();
@@ -78,8 +79,16 @@ export default function PaymentsScreen() {
                 const loans = JSON.parse(loansData);
                 const loan = loans.find((l: any) => l.id === id);
                 if (loan) {
-                    setEarlyPayments(loan.earlyPayments || []);
-                    setRateAdjustments(loan.rateAdjustments || []);
+                    const loadedEarlyPayments = loan.earlyPayments || [];
+                    const loadedRateAdjustments = loan.rateAdjustments || [];
+                    
+                    setEarlyPayments(loadedEarlyPayments);
+                    setRateAdjustments(loadedRateAdjustments);
+                    
+                    // IMPORTANT: Update refs to match loaded state
+                    earlyPaymentsRef.current = loadedEarlyPayments;
+                    rateAdjustmentsRef.current = loadedRateAdjustments;
+                    
                     if (loan.startDate) {
                         const parsedDate = new Date(loan.startDate);
                         setStartDate(parsedDate);
@@ -107,11 +116,56 @@ export default function PaymentsScreen() {
                 // Preserve the existing loan data and only update adjustments
                 const existingLoan = loans[loanIndex];
                 
+                // Recalculate schedule-dependent values
+                const principal = existingLoan.amount;
+                const annualRate = existingLoan.interestRate;
+                const termInMonths = existingLoan.termUnit === 'years' ? existingLoan.term * 12 : existingLoan.term;
+                
+                // Convert rate adjustments to calculation format
+                const rateAdjustmentsForCalc = rateAdjustmentsRef.current.map(adj => ({
+                    month: parseInt(adj.month),
+                    newRate: parseFloat(adj.newRate)
+                }));
+                
+                // Generate payment schedule with adjustments
+                const schedule = generatePaymentSchedule({
+                    principal,
+                    annualRate,
+                    termInMonths,
+                    startDate: new Date(existingLoan.startDate),
+                    earlyPayments: earlyPaymentsRef.current,
+                    rateAdjustments: rateAdjustmentsForCalc
+                });
+                
+                // Calculate current monthly payment from schedule
+                const monthsElapsed = Math.max(0, Math.floor((Date.now() - new Date(existingLoan.startDate).getTime()) / (1000 * 60 * 60 * 24 * 30.44)));
+                const { monthlyPayment } = calculatePayment({ principal, annualRate, termInMonths });
+                const currentMonthlyPayment = schedule.length === 0 || monthsElapsed >= schedule.length
+                    ? monthlyPayment
+                    : schedule[monthsElapsed]?.payment || monthlyPayment;
+                
+                // Calculate remaining balance from schedule
+                const remainingBalance = schedule.length === 0 || monthsElapsed === 0
+                    ? principal
+                    : monthsElapsed >= schedule.length
+                        ? 0
+                        : Math.max(0, schedule[monthsElapsed]?.balance || 0);
+                
+                // Calculate freedom date
+                const freedomDate = schedule.length > 0 ? (() => {
+                    const finalDate = new Date(existingLoan.startDate);
+                    finalDate.setMonth(finalDate.getMonth() + schedule.length - 1);
+                    return finalDate.toISOString();
+                })() : null;
+                
                 // Create a new loan object to avoid mutation issues
                 loans[loanIndex] = {
                     ...existingLoan,
                     earlyPayments: JSON.parse(JSON.stringify(earlyPaymentsRef.current)), // Deep clone
                     rateAdjustments: JSON.parse(JSON.stringify(rateAdjustmentsRef.current)), // Deep clone
+                    currentMonthlyPayment,
+                    remainingBalance,
+                    freedomDate,
                 };
                 
                 await AsyncStorage.setItem('loans', JSON.stringify(loans));
@@ -122,18 +176,21 @@ export default function PaymentsScreen() {
         }
     };
 
-    // Handle early payment changes and trigger auto-save
+    // Handle early payment changes
     const handleEarlyPaymentsChange = (payments: EarlyPayment[]) => {
         setEarlyPayments(payments);
         earlyPaymentsRef.current = payments; // Keep ref in sync
-        autoSaveRef.current?.trigger();
     };
 
-    // Handle rate adjustment changes and trigger auto-save
+    // Handle rate adjustment changes
     const handleRateAdjustmentsChange = (adjustments: RateAdjustment[]) => {
         setRateAdjustments(adjustments);
         rateAdjustmentsRef.current = adjustments; // Keep ref in sync
-        autoSaveRef.current?.trigger();
+    };
+
+    // Trigger save when modal closes
+    const handleModalClose = () => {
+        autoSaveRef.current?.forceSave();
     };
 
     return (
@@ -158,6 +215,7 @@ export default function PaymentsScreen() {
                     ref={earlyPaymentListRef}
                     payments={earlyPayments}
                     onPaymentsChange={handleEarlyPaymentsChange}
+                    onModalClose={handleModalClose}
                     loanStartDate={startDate}
                     loanTermInMonths={loanTermInMonths}
                 />
@@ -177,6 +235,7 @@ export default function PaymentsScreen() {
                     ref={rateAdjustmentListRef}
                     adjustments={rateAdjustments}
                     onAdjustmentsChange={handleRateAdjustmentsChange}
+                    onModalClose={handleModalClose}
                     loanStartDate={startDate}
                     loanTermInMonths={loanTermInMonths}
                 />
