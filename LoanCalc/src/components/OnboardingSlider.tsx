@@ -16,8 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Asset } from 'expo-asset';
 import { theme } from '../constants/theme';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const IS_SMALL_DEVICE = SCREEN_HEIGHT < 700;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface OnboardingSliderProps {
   visible: boolean;
@@ -27,36 +26,36 @@ interface OnboardingSliderProps {
 const slides = [
   {
     id: 1,
-    title: 'Drowning in Debt?',
-    description: 'Multiple loans, scattered payments, unclear timelines. Sound familiar? You\'re not alone, and there\'s a better way.',
-    icon: 'alert-circle' as keyof typeof Ionicons.glyphMap,
+    title: 'Welcome to Freedom Faster! 🎉',
+    description: 'What if you could pay off your debt YEARS earlier and save THOUSANDS in interest? You absolutely can - and you just found the secret weapon. Let\'s make debt history together!',
+    icon: 'rocket' as keyof typeof Ionicons.glyphMap,
     image: require('../../assets/onboarding/slide1.webp'),
   },
   {
     id: 2,
-    title: 'Take Control Today',
-    description: 'See all your loans in one beautiful dashboard. Track total debt, monthly payments, and remaining balances with crystal-clear visuals.',
+    title: 'See Your Finish Line Crystal Clear',
+    description: 'No more guessing! Get instant insights into your payoff timeline, total interest, and monthly payments. Beautiful visuals make your path to freedom impossible to miss.',
     icon: 'stats-chart' as keyof typeof Ionicons.glyphMap,
     image: require('../../assets/onboarding/slide2.webp'),
   },
   {
     id: 3,
-    title: 'Crush Your Debt Faster',
-    description: 'Discover how extra payments can save you thousands in interest and shave years off your loans. See the impact instantly.',
+    title: 'The Extra Payment Superpower ⚡',
+    description: 'Here\'s the game-changer: even small extra payments create MASSIVE results. Watch in real-time as adding just $50 or $100 can shave months or years off your debt. Pure magic!',
     icon: 'flash' as keyof typeof Ionicons.glyphMap,
     image: require('../../assets/onboarding/slide3.webp'),
   },
   {
     id: 4,
-    title: 'Smart Payment Plans',
-    description: 'Use proven strategies like Avalanche (highest interest first) or Snowball (smallest balance first) to optimize your payoff journey.',
+    title: 'Smart Strategies = Faster Freedom 🎯',
+    description: 'Discover proven payoff strategies that maximize your impact. See different scenarios side-by-side and choose the fastest path that works for YOU. Knowledge is power!',
     icon: 'bulb' as keyof typeof Ionicons.glyphMap,
     image: require('../../assets/onboarding/slide4.webp'),
   },
   {
     id: 5,
-    title: 'Your Journey to Freedom',
-    description: 'Watch your progress with beautiful charts. See your balance shrink, track where every dollar goes, and celebrate milestones along the way.',
+    title: 'Watch Your Debt Vanish! 🌟',
+    description: 'There\'s nothing quite like seeing your progress come to life. Track your shrinking balance, visualize your interest savings, and celebrate every milestone on your journey to $0!',
     icon: 'trending-up' as keyof typeof Ionicons.glyphMap,
     image: [
       require('../../assets/onboarding/slide5.webp'),
@@ -65,8 +64,8 @@ const slides = [
   },
   {
     id: 6,
-    title: 'Ready to Begin?',
-    description: 'Create your first loan in seconds. Get instant payment schedules, savings projections, and a clear path to being debt-free.',
+    title: 'Let\'s Crush This Debt! 💪',
+    description: 'In seconds, you\'ll see exactly how fast you can be debt-free and how much you\'ll save. Your future self is cheering you on. Ready to start your fastest path to financial freedom?',
     icon: 'checkmark-circle' as keyof typeof Ionicons.glyphMap,
     image: undefined,
     showLogo: true,
@@ -177,6 +176,11 @@ export default function OnboardingSlider({ visible, onComplete }: OnboardingSlid
         >
           {slides.map((slide) => (
             <View key={slide.id} style={styles.slide}>
+              <ScrollView 
+                style={styles.slideScrollView}
+                contentContainerStyle={styles.slideContent}
+                showsVerticalScrollIndicator={false}
+              >
               {slide.image ? (
                 Array.isArray(slide.image) ? (
                   <View style={styles.dualImageContainer}>
@@ -206,6 +210,7 @@ export default function OnboardingSlider({ visible, onComplete }: OnboardingSlid
               )}
               <Text style={styles.title}>{slide.title}</Text>
               <Text style={styles.description}>{slide.description}</Text>
+              </ScrollView>
             </View>
           ))}
         </ScrollView>
@@ -264,39 +269,45 @@ const styles = StyleSheet.create({
   slide: {
     width: SCREEN_WIDTH,
     flex: 1,
+  },
+  slideScrollView: {
+    flex: 1,
+  },
+  slideContent: {
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 40,
-    paddingVertical: IS_SMALL_DEVICE ? 20 : 40,
+    paddingVertical: 40,
   },
   iconContainer: {
-    marginBottom: IS_SMALL_DEVICE ? 20 : 40,
+    marginBottom: 40,
   },
   logoContainer: {
-    marginBottom: IS_SMALL_DEVICE ? 20 : 40,
+    marginBottom: 40,
   },
   logoImage: {
-    width: IS_SMALL_DEVICE ? 100 : 140,
-    height: IS_SMALL_DEVICE ? 100 : 140,
+    width: 140,
+    height: 140,
   },
   imageFrame: {
     backgroundColor: theme.colors.surface,
     borderRadius: theme.borderRadius.lg,
     padding: 8,
-    marginBottom: IS_SMALL_DEVICE ? 15 : 30,
+    marginBottom: 30,
     ...theme.shadows.md,
     borderWidth: 1,
     borderColor: theme.colors.gray200,
   },
   slideImage: {
     width: SCREEN_WIDTH * 0.75,
-    height: IS_SMALL_DEVICE ? SCREEN_WIDTH * 0.95 : SCREEN_WIDTH * 1.15,
+    height: SCREEN_WIDTH * 1.15,
     borderRadius: 12,
   },
   dualImageContainer: {
     flexDirection: 'row',
     gap: 12,
-    marginBottom: IS_SMALL_DEVICE ? 15 : 30,
+    marginBottom: 30,
   },
   dualImageFrame: {
     backgroundColor: theme.colors.surface,
@@ -308,21 +319,21 @@ const styles = StyleSheet.create({
   },
   dualSlideImage: {
     width: SCREEN_WIDTH * 0.35,
-    height: IS_SMALL_DEVICE ? SCREEN_WIDTH * 0.65 : SCREEN_WIDTH * 0.75,
+    height: SCREEN_WIDTH * 0.75,
     borderRadius: 8,
   },
   title: {
-    fontSize: IS_SMALL_DEVICE ? theme.fontSize.xxl : theme.fontSize.xxxl,
+    fontSize: theme.fontSize.xxxl,
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.textPrimary,
-    marginBottom: IS_SMALL_DEVICE ? theme.spacing.md : theme.spacing.xl,
+    marginBottom: theme.spacing.xl,
     textAlign: 'center',
   },
   description: {
-    fontSize: IS_SMALL_DEVICE ? theme.fontSize.sm : theme.fontSize.base,
+    fontSize: theme.fontSize.base,
     color: theme.colors.textSecondary,
     textAlign: 'center',
-    lineHeight: IS_SMALL_DEVICE ? 20 : 24,
+    lineHeight: 24,
   },
   pagination: {
     flexDirection: 'row',
