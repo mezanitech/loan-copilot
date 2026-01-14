@@ -69,52 +69,59 @@ export async function areNotificationsEnabled(): Promise<boolean> {
 }
 
 /**
- * Schedule payment reminder notifications for a loan
+ * Schedule notification for the next upcoming payment based on actual payment schedule
+ * Returns the notification ID if scheduled, empty array otherwise
  */
-export async function schedulePaymentReminders(
+export async function scheduleNextPaymentReminder(
     loanId: string,
     loanName: string,
-    monthlyPayment: number,
+    paymentSchedule: Array<{ payment: number; date?: string | Date }>,
     startDate: string,
-    termInMonths: number,
     reminderDaysBefore: number
 ): Promise<string[]> {
-    const notificationIds: string[] = [];
-    const start = parseDateFromStorage(startDate);
+    if (!paymentSchedule || paymentSchedule.length === 0) {
+        return [];
+    }
 
-    for (let i = 0; i < termInMonths; i++) {
+    const start = parseDateFromStorage(startDate);
+    const now = new Date();
+    
+    // Find the next payment that hasn't occurred yet
+    for (let i = 0; i < paymentSchedule.length; i++) {
+        const payment = paymentSchedule[i];
+        
         // Calculate payment date
         const paymentDate = new Date(start);
         paymentDate.setMonth(start.getMonth() + i);
-
+        
+        // Skip if payment date is in the past
+        if (paymentDate < now) {
+            continue;
+        }
+        
         // Calculate reminder date (X days before payment)
         const reminderDate = new Date(paymentDate);
         reminderDate.setDate(paymentDate.getDate() - reminderDaysBefore);
-
-        // Set notification time to 9:00 AM
         reminderDate.setHours(9, 0, 0, 0);
-
+        
         // Skip if reminder date is in the past
-        if (reminderDate < new Date()) {
+        if (reminderDate < now) {
             continue;
         }
-
+        
         const dateStr = formatDateForStorage(paymentDate);
+        const secondsUntilReminder = Math.floor((reminderDate.getTime() - now.getTime()) / 1000);
         
-        // Calculate seconds until the reminder
-        const secondsUntilReminder = Math.floor((reminderDate.getTime() - Date.now()) / 1000);
-        
-        // Skip if reminder date is in the past
         if (secondsUntilReminder <= 0) {
             continue;
         }
-
+        
         try {
             const currency = await getCurrencyPreference();
-            await Notifications.scheduleNotificationAsync({
+            const notificationId = await Notifications.scheduleNotificationAsync({
                 content: {
                     title: '💳 Payment Reminder',
-                    body: `Your ${loanName} payment of ${formatCurrency(monthlyPayment, currency)} is due in ${reminderDaysBefore} day${reminderDaysBefore !== 1 ? 's' : ''}`,
+                    body: `Your ${loanName} payment of ${formatCurrency(payment.payment, currency)} is due in ${reminderDaysBefore} day${reminderDaysBefore !== 1 ? 's' : ''}`,
                     data: { loanId, paymentDate: dateStr },
                     sound: true,
                 },
@@ -124,15 +131,32 @@ export async function schedulePaymentReminders(
                     repeats: false,
                 },
             });
-
-            const identifier = `loan-${loanId}-${dateStr}`;
-            notificationIds.push(identifier);
+            
+            return [notificationId];
         } catch (error) {
             console.error('Error scheduling notification:', error);
+            return [];
         }
     }
+    
+    return [];
+}
 
-    return notificationIds;
+/**
+ * DEPRECATED: Old function that scheduled all payments at once
+ * Kept for backward compatibility but should not be used
+ */
+export async function schedulePaymentReminders(
+    loanId: string,
+    loanName: string,
+    monthlyPayment: number,
+    startDate: string,
+    termInMonths: number,
+    reminderDaysBefore: number
+): Promise<string[]> {
+    // This function is deprecated - use scheduleNextPaymentReminder instead
+    console.warn('schedulePaymentReminders is deprecated, use scheduleNextPaymentReminder instead');
+    return [];
 }
 
 /**
@@ -144,8 +168,14 @@ export async function cancelLoanNotifications(notificationIds: string[]): Promis
     }
 
     try {
+        // Try to cancel each notification by ID
         for (const id of notificationIds) {
-            await Notifications.cancelScheduledNotificationAsync(id);
+            try {
+                await Notifications.cancelScheduledNotificationAsync(id);
+            } catch (error) {
+                // Ignore errors for individual notifications (they might not exist)
+                console.log(`Could not cancel notification ${id}:`, error);
+            }
         }
     } catch (error) {
         console.error('Error canceling notifications:', error);
@@ -191,5 +221,67 @@ export async function sendTestNotification(): Promise<void> {
     } catch (error) {
         console.error('Error sending test notification:', error);
         throw error;
+    }
+}
+
+/**
+ * Check and schedule next payment notifications for all loans
+ * Should be called when the app opens or when loans are updated
+ */
+export async function checkAndScheduleNextPayments(
+    loans: any[],
+    notificationPrefs: { enabled: boolean; reminderDays: number },
+    generatePaymentSchedule: (params: any) => any[]
+): Promise<void> {
+    // First, cancel ALL scheduled notifications to clean up any old ones
+    try {
+        await cancelAllNotifications();
+    } catch (error) {
+        console.error('Error clearing old notifications:', error);
+    }
+    
+    if (!notificationPrefs.enabled) {
+        // Clear notification IDs from all loans
+        for (const loan of loans) {
+            loan.scheduledNotificationIds = [];
+        }
+        return;
+    }
+    
+    for (const loan of loans) {
+        try {
+            // Generate the actual payment schedule with adjustments
+            const termInMonths = loan.termUnit === 'years' ? loan.term * 12 : loan.term;
+            const [year, month, day] = loan.startDate.split('-').map(Number);
+            const startDate = new Date(year, month - 1, day);
+            
+            const rateAdjustmentsForCalc = (loan.rateAdjustments || []).map((adj: any) => ({
+                month: parseInt(adj.month),
+                newRate: parseFloat(adj.newRate)
+            }));
+            
+            const schedule = generatePaymentSchedule({
+                principal: loan.amount,
+                annualRate: loan.interestRate,
+                termInMonths,
+                startDate,
+                earlyPayments: loan.earlyPayments || [],
+                rateAdjustments: rateAdjustmentsForCalc
+            });
+            
+            // Schedule next payment notification
+            const notificationIds = await scheduleNextPaymentReminder(
+                loan.id,
+                loan.name || 'Loan',
+                schedule,
+                loan.startDate,
+                notificationPrefs.reminderDays
+            );
+            
+            // Update loan with new notification ID
+            loan.scheduledNotificationIds = notificationIds;
+        } catch (error) {
+            console.error(`Error scheduling notification for loan ${loan.id}:`, error);
+        }
     }
 }

@@ -22,9 +22,11 @@ import EditModal from "../../../components/EditModal";
 // Import calculation utilities
 import { calculatePayment, generatePaymentSchedule, calculateSavings, convertTermToMonths } from "../../../utils/loanCalculations";
 // Import notification utilities
-import { schedulePaymentReminders, cancelLoanNotifications } from "../../../utils/notificationUtils";
+import { schedulePaymentReminders, cancelLoanNotifications, scheduleNextPaymentReminder } from "../../../utils/notificationUtils";
 import { getNotificationPreferences, getCurrencyPreference, Currency } from "../../../utils/storage";
 import { formatCurrency } from "../../../utils/currencyUtils";
+// Import achievement tracking
+import { incrementProgress } from "../../../utils/achievementUtils";
 // Import PDF utilities - only on native platforms
 const generateRobustLoanPDF = Platform.OS !== 'web'
   ? require("../../../utils/pdfLibReportUtils").generateRobustLoanPDF
@@ -49,6 +51,7 @@ export default function LoanOverviewScreen() {
     const autoSaveRef = useRef<AutoSaveHandle>(null);
     const [currency, setCurrency] = useState<Currency>({ code: 'USD', symbol: '$', name: 'US Dollar', position: 'before' });
     const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+    const [isDuplicating, setIsDuplicating] = useState(false);
     const [isLoading, setIsLoading] = useState(true); // Loading state for initial data fetch
     const [isEditModalOpen, setIsEditModalOpen] = useState(false); // Modal state
     
@@ -203,10 +206,26 @@ export default function LoanOverviewScreen() {
 
     // Convert RateAdjustment[] (strings) to calculation format (numbers)
     const getRateAdjustmentsForCalc = () => {
-        return rateAdjustments.map(adj => ({
-            month: parseInt(adj.month),
-            newRate: parseFloat(adj.newRate)
-        }));
+        return rateAdjustments.map(adj => {
+            let monthNumber = parseInt(adj.month);
+            
+            // If date is provided, calculate actual month from dates
+            if (adj.date) {
+                const [adjYear, adjMonth, adjDay] = adj.date.split('-').map(Number);
+                const adjDate = new Date(adjYear, adjMonth - 1, adjDay);
+                const loanStartDate = date;
+                
+                const monthsDiff = (adjDate.getFullYear() - loanStartDate.getFullYear()) * 12 + 
+                                 (adjDate.getMonth() - loanStartDate.getMonth());
+                monthNumber = monthsDiff;
+            }
+            
+            return {
+                month: monthNumber,
+                newRate: parseFloat(adj.newRate),
+                date: adj.date
+            };
+        });
     };
 
     // Calculate monthly payment using standard loan amortization formula
@@ -298,12 +317,12 @@ export default function LoanOverviewScreen() {
                 let scheduledNotificationIds: string[] = [];
                 
                 if (notificationPrefs.enabled) {
-                    scheduledNotificationIds = await schedulePaymentReminders(
+                    // Schedule only the next payment notification based on actual schedule
+                    scheduledNotificationIds = await scheduleNextPaymentReminder(
                         loanId,
                         loanName,
-                        monthlyPayment,
+                        paymentSchedule,
                         getStartDate(),
-                        termInMonths,
                         notificationPrefs.reminderDays
                     );
                 }
@@ -331,6 +350,9 @@ export default function LoanOverviewScreen() {
         }
         
         setIsGeneratingPDF(true);
+        
+        let uri: string | null = null;
+        
         try {
             // Filter out invalid early payments before generating PDF
             const validEarlyPayments = earlyPayments.filter(isValidEarlyPayment);
@@ -344,12 +366,37 @@ export default function LoanOverviewScreen() {
             const originalTotalPayment = monthlyPayment * termInMonths;
             const originalTotalInterest = originalTotalPayment - parseFloat(loanAmount || '0');
             
+            // Calculate current interest rate (considering rate adjustments)
+            let currentInterestRate = parseFloat(interestRate || '0');
+            if (rateAdjustments.length > 0) {
+                // Find the most recent rate adjustment that has occurred
+                const sortedAdjustments = [...rateAdjustments]
+                    .map(adj => {
+                        let month = parseInt(adj.month);
+                        if (adj.date) {
+                            const [adjYear, adjMonth, adjDay] = adj.date.split('-').map(Number);
+                            const adjDate = new Date(adjYear, adjMonth - 1, adjDay);
+                            const monthsDiff = (adjDate.getFullYear() - date.getFullYear()) * 12 + 
+                                             (adjDate.getMonth() - date.getMonth());
+                            month = monthsDiff + 1;
+                        }
+                        return { month, newRate: parseFloat(adj.newRate) };
+                    })
+                    .filter(adj => adj.month <= monthsElapsed + 1)
+                    .sort((a, b) => b.month - a.month);
+                
+                if (sortedAdjustments.length > 0) {
+                    currentInterestRate = sortedAdjustments[0].newRate;
+                }
+            }
+            
             // Prepare loan data for pdf-lib
             const loanData = {
                 loanId: loanId || 'unknown',
                 name: loanName || 'Loan',
                 amount: parseFloat(loanAmount || '0'),
                 interestRate: parseFloat(interestRate || '0'),
+                currentInterestRate,
                 termInMonths,
                 monthlyPayment: currentMonthlyPayment, // Use current payment that reflects rate adjustments
                 totalPayment: actualTotalPayment,
@@ -389,7 +436,7 @@ export default function LoanOverviewScreen() {
             
             // Save to device
             const filename = `${loanData.name.replace(/[^a-zA-Z0-9]/g, '_')}_report.pdf`;
-            const uri = FileSystem.documentDirectory + filename;
+            uri = FileSystem.documentDirectory + filename;
             
             // Convert Uint8Array to base64 string
             const base64String = btoa(String.fromCharCode(...pdfBytes));
@@ -398,16 +445,129 @@ export default function LoanOverviewScreen() {
                 encoding: 'base64',
             });
             
-            // Share the PDF
-            await Sharing.shareAsync(uri, { 
-                mimeType: 'application/pdf',
-                dialogTitle: 'Share Loan Report'
-            });
+            // Share the PDF - wrap in try/catch to handle dismissal gracefully
+            try {
+                await Sharing.shareAsync(uri, { 
+                    mimeType: 'application/pdf',
+                    dialogTitle: 'Share Loan Report'
+                });
+                
+                // Track achievement: exported report
+                await incrementProgress('reports_exported');
+            } catch (shareError) {
+                // User dismissed the share dialog - this is normal, not an error
+                console.log('Share dialog dismissed');
+            }
         } catch (error) {
-            // Silently ignore user cancellations, show alert for real errors
-            console.log('PDF generation/sharing:', error);
+            // Show alert for actual errors during PDF generation
+            console.error('PDF generation error:', error);
+            Alert.alert(
+                'Error',
+                'Failed to generate PDF report. Please try again.',
+                [{ text: 'OK' }]
+            );
         } finally {
+            // Always reset loading state
             setIsGeneratingPDF(false);
+            
+            // Clean up temporary file if it was created
+            if (uri) {
+                try {
+                    await FileSystem.deleteAsync(uri, { idempotent: true });
+                } catch (cleanupError) {
+                    // Ignore cleanup errors
+                    console.log('Cleanup skipped:', cleanupError);
+                }
+            }
+        }
+    };
+
+    // Duplicate loan function - creates a copy for testing different scenarios
+    const duplicateLoan = async () => {
+        if (!isValidLoanData()) {
+            Alert.alert('Invalid Data', 'Please fix loan data errors before duplicating.');
+            return;
+        }
+
+        setIsDuplicating(true);
+        
+        try {
+            // Get existing loans from storage
+            const loansData = await AsyncStorage.getItem('loans');
+            const loans = loansData ? JSON.parse(loansData) : [];
+            
+            // Find current loan
+            const currentLoan = loans.find((l: any) => l.id === loanId);
+            if (!currentLoan) {
+                throw new Error('Current loan not found');
+            }
+            
+            // Generate new unique ID
+            const newId = `loan_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            
+            // Create duplicate with new ID and modified name
+            const duplicatedLoan = {
+                ...currentLoan,
+                id: newId,
+                name: `${loanName} - Plan B`,
+                createdAt: new Date().toISOString(),
+                // Clear notification IDs (will be rescheduled)
+                scheduledNotificationIds: []
+            };
+            
+            // Add to loans array
+            loans.push(duplicatedLoan);
+            
+            // Save to storage
+            await AsyncStorage.setItem('loans', JSON.stringify(loans));
+            
+            // Track achievement: duplicated loan (cumulative count)
+            await incrementProgress('total_duplicates');
+            
+            // Schedule notifications for the new loan if enabled
+            const notificationPrefs = await getNotificationPreferences();
+            if (notificationPrefs.enabled && paymentSchedule.length > 0) {
+                const scheduledIds = await scheduleNextPaymentReminder(
+                    newId,
+                    duplicatedLoan.name,
+                    paymentSchedule,
+                    getStartDate(),
+                    notificationPrefs.reminderDays
+                );
+                
+                // Update the loan with notification IDs
+                duplicatedLoan.scheduledNotificationIds = scheduledIds;
+                const loanIndex = loans.findIndex((l: any) => l.id === newId);
+                if (loanIndex !== -1) {
+                    loans[loanIndex] = duplicatedLoan;
+                    await AsyncStorage.setItem('loans', JSON.stringify(loans));
+                }
+            }
+            
+            // Show success message and navigate to new loan
+            Alert.alert(
+                'Loan Duplicated',
+                `"${duplicatedLoan.name}" has been created. You can now test different scenarios.`,
+                [
+                    {
+                        text: 'View Copy',
+                        onPress: () => router.push(`/(tabs)/${newId}/overview`)
+                    },
+                    {
+                        text: 'Stay Here',
+                        style: 'cancel'
+                    }
+                ]
+            );
+        } catch (error) {
+            console.error('Error duplicating loan:', error);
+            Alert.alert(
+                'Error',
+                'Failed to duplicate loan. Please try again.',
+                [{ text: 'OK' }]
+            );
+        } finally {
+            setIsDuplicating(false);
         }
     };
 
@@ -581,6 +741,21 @@ export default function LoanOverviewScreen() {
             {/* Action buttons at top */}
             <View style={styles.topButtonContainer}>
                 <TouchableOpacity 
+                    style={[styles.duplicateButtonTop, isDuplicating && styles.exportButtonDisabled]} 
+                    onPress={duplicateLoan}
+                    disabled={isDuplicating || !isValidLoanData()}
+                >
+                    {isDuplicating ? (
+                        <View style={styles.loadingContainer}>
+                            <ActivityIndicator size="small" color={theme.colors.success} />
+                            <Text style={styles.duplicateButtonTopText}>Copying...</Text>
+                        </View>
+                    ) : (
+                        <Text style={styles.duplicateButtonTopText}>📋 Duplicate</Text>
+                    )}
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
                     style={[styles.exportButtonTop, isGeneratingPDF && styles.exportButtonDisabled]} 
                     onPress={generateTestPDF}
                     disabled={isGeneratingPDF}
@@ -725,9 +900,19 @@ export default function LoanOverviewScreen() {
                                 </Text>
                             </View>
                             {rateAdjustments.map((adj, index) => {
-                                // Calculate the date for this adjustment
+                                // Calculate the actual month number from date if available
+                                let displayMonth = parseInt(adj.month);
+                                if (adj.date) {
+                                    const [adjYear, adjMonth, adjDay] = adj.date.split('-').map(Number);
+                                    const adjDate = new Date(adjYear, adjMonth - 1, adjDay);
+                                    const monthsDiff = (adjDate.getFullYear() - date.getFullYear()) * 12 + 
+                                                     (adjDate.getMonth() - date.getMonth());
+                                    displayMonth = monthsDiff + 1;
+                                }
+                                
+                                // Calculate the date for display
                                 const adjustmentDate = new Date(date);
-                                adjustmentDate.setMonth(adjustmentDate.getMonth() + parseInt(adj.month) - 1);
+                                adjustmentDate.setMonth(adjustmentDate.getMonth() + displayMonth - 1);
                                 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
                                 const dateString = `${monthNames[adjustmentDate.getMonth()]} ${adjustmentDate.getFullYear()}`;
                                 
@@ -738,7 +923,7 @@ export default function LoanOverviewScreen() {
                                                 {adj.name && (
                                                     <Text style={styles.rateAdjustmentName}>{adj.name}</Text>
                                                 )}
-                                                <Text style={styles.rateAdjustmentMonth}>Payment #{adj.month}</Text>
+                                                <Text style={styles.rateAdjustmentMonth}>Payment #{displayMonth}</Text>
                                                 <Text style={styles.rateAdjustmentDate}>{dateString}</Text>
                                             </View>
                                             <Text style={styles.rateAdjustmentRate}>{adj.newRate}% APR</Text>
@@ -910,6 +1095,22 @@ const styles = StyleSheet.create({
     },
     exportButtonTopText: {
         color: theme.colors.primary,
+        fontSize: theme.fontSize.base,
+        fontWeight: theme.fontWeight.semibold,
+    },
+    // Duplicate button (top)
+    duplicateButtonTop: {
+        flex: 1,
+        backgroundColor: theme.colors.surfaceGlass,
+        padding: theme.spacing.md,
+        borderRadius: theme.borderRadius.lg,
+        alignItems: "center",
+        borderWidth: 1,
+        borderColor: 'rgba(34, 197, 94, 0.3)', // Success color border
+        ...theme.shadows.glass,
+    },
+    duplicateButtonTopText: {
+        color: theme.colors.success,
         fontSize: theme.fontSize.base,
         fontWeight: theme.fontWeight.semibold,
     },

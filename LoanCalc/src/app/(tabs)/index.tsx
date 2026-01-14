@@ -8,9 +8,11 @@ import * as Sharing from 'expo-sharing';
 import { theme } from '../../constants/theme';
 import PieChart from '../../components/PieChart';
 import OnboardingSlider from '../../components/OnboardingSlider';
-import { cancelLoanNotifications } from '../../utils/notificationUtils';
-import { getCurrencyPreference, Currency } from '../../utils/storage';
+import { cancelLoanNotifications, checkAndScheduleNextPayments } from '../../utils/notificationUtils';
+import { getCurrencyPreference, Currency, getNotificationPreferences } from '../../utils/storage';
 import { formatCurrency } from '../../utils/currencyUtils';
+import { updateProgress } from '../../utils/achievementUtils';
+import { generatePaymentSchedule } from '../../utils/loanCalculations';
 
 // Only import PDF generation on native platforms
 const generateRobustLoanPDF = Platform.OS !== 'web' 
@@ -58,7 +60,11 @@ export default function DashboardScreen() {
         try {
             const storedLoans = await AsyncStorage.getItem('loans');
             if (storedLoans) {
-                setLoans(JSON.parse(storedLoans));
+                const loadedLoans = JSON.parse(storedLoans);
+                setLoans(loadedLoans);
+                
+                // Track achievement: max active loans
+                await updateProgress('max_active_loans', loadedLoans.length);
             }
         } catch (error) {
             console.error('Failed to load loans:', error);
@@ -68,10 +74,36 @@ export default function DashboardScreen() {
     // Load loans every time this screen comes into focus
     useFocusEffect(
         useCallback(() => {
-            loadLoans();
-            loadCurrency();
+            const loadAndSchedule = async () => {
+                await loadLoans();
+                await loadCurrency();
+                await checkAndScheduleNotifications();
+            };
+            loadAndSchedule();
         }, [])
     );
+
+    // Check and schedule next payment notifications
+    const checkAndScheduleNotifications = async () => {
+        try {
+            const storedLoans = await AsyncStorage.getItem('loans');
+            if (!storedLoans) return;
+            
+            const loansData = JSON.parse(storedLoans);
+            const notificationPrefs = await getNotificationPreferences();
+            
+            // Check and schedule next payments for all loans
+            await checkAndScheduleNextPayments(loansData, notificationPrefs, generatePaymentSchedule);
+            
+            // Save updated loans with new notification IDs
+            await AsyncStorage.setItem('loans', JSON.stringify(loansData));
+            
+            // Refresh loans state if changed
+            setLoans(loansData);
+        } catch (error) {
+            console.error('Error checking notifications:', error);
+        }
+    };
 
     const loadCurrency = async () => {
         const curr = await getCurrencyPreference();

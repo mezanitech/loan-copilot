@@ -3,6 +3,7 @@ import { Text, View, StyleSheet, ScrollView, TouchableOpacity, Platform } from "
 import { router } from 'expo-router';
 import { theme } from '../../constants/theme';
 import { getCurrencyPreference, saveCurrencyPreference, CURRENCIES, Currency } from '../../utils/storage';
+import { updateProgress } from '../../utils/achievementUtils';
 
 export default function CurrencySettingsScreen() {
     const [selectedCurrency, setSelectedCurrency] = useState<Currency>(CURRENCIES[0]);
@@ -20,6 +21,9 @@ export default function CurrencySettingsScreen() {
     const handleCurrencySelect = async (currency: Currency) => {
         await saveCurrencyPreference(currency.code);
         setSelectedCurrency(currency);
+        
+        // Track achievement: changed currency
+        await updateProgress('currency_changed', 1);
     };
 
     return (

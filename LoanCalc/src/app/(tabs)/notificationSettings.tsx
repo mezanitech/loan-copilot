@@ -11,11 +11,12 @@ import {
     areNotificationsEnabled, 
     sendTestNotification,
     getAllScheduledNotifications,
-    schedulePaymentReminders,
+    checkAndScheduleNextPayments,
     cancelLoanNotifications
 } from '../../utils/notificationUtils';
-import { convertTermToMonths } from '../../utils/loanCalculations';
+import { generatePaymentSchedule } from '../../utils/loanCalculations';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { updateProgress } from '../../utils/achievementUtils';
 
 export default function NotificationSettingsScreen() {
     const [enabled, setEnabled] = useState(false);
@@ -66,6 +67,11 @@ export default function NotificationSettingsScreen() {
         // Update all existing loans
         await rescheduleAllLoans(value, reminderDays);
         await loadScheduledCount();
+        
+        // Track achievement: enabled notifications
+        if (value) {
+            await updateProgress('notifications_enabled', 1);
+        }
 
         if (value) {
             Alert.alert(
@@ -102,31 +108,10 @@ export default function NotificationSettingsScreen() {
     const rescheduleAllLoans = async (shouldEnable: boolean, days: number) => {
         try {
             const loans = await getAllLoans();
+            const notificationPrefs = { enabled: shouldEnable, reminderDays: days };
             
-            // Process each loan
-            for (const loan of loans) {
-                // Cancel existing notifications
-                if (loan.scheduledNotificationIds && loan.scheduledNotificationIds.length > 0) {
-                    await cancelLoanNotifications(loan.scheduledNotificationIds);
-                }
-                
-                // Schedule new notifications if enabled
-                let newNotificationIds: string[] = [];
-                if (shouldEnable) {
-                    const termInMonths = convertTermToMonths(loan.term, loan.termUnit);
-                    newNotificationIds = await schedulePaymentReminders(
-                        loan.id,
-                        loan.name || 'Loan',
-                        loan.monthlyPayment,
-                        loan.startDate,
-                        termInMonths,
-                        days
-                    );
-                }
-                
-                // Update loan with new notification IDs
-                loan.scheduledNotificationIds = newNotificationIds;
-            }
+            // Use the new checkAndScheduleNextPayments function
+            await checkAndScheduleNextPayments(loans, notificationPrefs, generatePaymentSchedule);
             
             // Save all loans back to storage
             await AsyncStorage.setItem('loans', JSON.stringify(loans));
@@ -265,12 +250,6 @@ export default function NotificationSettingsScreen() {
                 {/* Debug Info */}
                 {enabled && (
                     <View style={styles.statsCard}>
-                        <View style={styles.statItem}>
-                            <Ionicons name="calendar" size={18} color={theme.colors.primary} />
-                            <Text style={styles.statText}>
-                                {scheduledCount} reminder{scheduledCount !== 1 ? 's' : ''} scheduled
-                            </Text>
-                        </View>
                         <View style={styles.statItem}>
                             <Ionicons 
                                 name={permissionGranted ? "checkmark-circle" : "close-circle"} 

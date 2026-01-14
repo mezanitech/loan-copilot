@@ -13,6 +13,8 @@ import { RateAdjustment } from "../../../components/RateAdjustmentList";
 import { theme } from '../../../constants/theme';
 // Import calculation utilities
 import { calculatePayment, generatePaymentSchedule, convertTermToMonths } from "../../../utils/loanCalculations";
+// Import achievement tracking
+import { updateProgress } from "../../../utils/achievementUtils";
 
 
 export default function LoanScheduleScreen() {
@@ -45,6 +47,9 @@ export default function LoanScheduleScreen() {
             }
             // Reset to collapsed view when returning to this tab
             setShowAllPayments(false);
+            
+            // Track achievement: viewed schedule (fire and forget)
+            updateProgress('schedules_viewed', 1);
         }, [loanId])
     );
 

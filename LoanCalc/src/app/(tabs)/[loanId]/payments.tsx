@@ -7,6 +7,7 @@ import EarlyPaymentList, { EarlyPayment, EarlyPaymentListRef } from "../../../co
 import RateAdjustmentList, { RateAdjustment, RateAdjustmentListRef } from "../../../components/RateAdjustmentList";
 import { AutoSaveIndicator, AutoSaveHandle } from "../../../components/AutoSaveIndicator";
 import { calculatePayment, generatePaymentSchedule } from "../../../utils/loanCalculations";
+import { incrementProgress, updateProgress } from "../../../utils/achievementUtils";
 
 export default function PaymentsScreen() {
     const params = useGlobalSearchParams();
@@ -175,6 +176,51 @@ export default function PaymentsScreen() {
                 };
                 
                 await AsyncStorage.setItem('loans', JSON.stringify(loans));
+                
+                // Track achievements - always update counts
+                // Count total early payments across all loans (after saving)
+                const totalEarlyPayments = loans.reduce((sum, loan) => 
+                    sum + (loan.earlyPayments?.length || 0), 0
+                );
+                await updateProgress('total_early_payments', totalEarlyPayments);
+                
+                // Check for recurring payments in current loan
+                if (earlyPaymentsRef.current.length > 0) {
+                    const hasRecurring = earlyPaymentsRef.current.some(ep => ep.type === 'recurring');
+                    if (hasRecurring) {
+                        await updateProgress('recurring_payments_added', 1);
+                    }
+                }
+                
+                // Count total rate adjustments across all loans (after saving)
+                const totalRateAdjustments = loans.reduce((sum, loan) => 
+                    sum + (loan.rateAdjustments?.length || 0), 0
+                );
+                if (totalRateAdjustments > 0) {
+                    await updateProgress('rate_adjustments_added', totalRateAdjustments);
+                }
+                
+                // Calculate total interest saved and time saved for savings achievements
+                // Only count savings from EARLY PAYMENTS, not from rate changes
+                if (schedule.length > 0 && earlyPaymentsRef.current.length > 0) {
+                    // Generate schedule WITH rate adjustments but WITHOUT early payments
+                    const scheduleWithOnlyRates = generatePaymentSchedule({
+                        principal,
+                        annualRate,
+                        termInMonths,
+                        startDate: loanStartDate,
+                        rateAdjustments: rateAdjustmentsForCalc
+                    });
+                    
+                    // Compare to schedule with BOTH rate adjustments AND early payments
+                    const interestWithOnlyRates = scheduleWithOnlyRates.reduce((sum, payment) => sum + payment.interest, 0);
+                    const interestWithBoth = schedule.reduce((sum, payment) => sum + payment.interest, 0);
+                    const interestSaved = Math.max(0, interestWithOnlyRates - interestWithBoth);
+                    const monthsSaved = Math.max(0, scheduleWithOnlyRates.length - schedule.length);
+                    
+                    await updateProgress('max_interest_saved', interestSaved);
+                    await updateProgress('max_months_saved', monthsSaved);
+                }
             }
         } catch (error) {
             console.error('Error saving adjustments:', error);

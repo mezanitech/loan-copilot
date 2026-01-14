@@ -55,6 +55,7 @@ export interface LoanData {
   totalPayments?: number;
   originalTotalPayment?: number;
   originalTotalInterest?: number;
+  currentInterestRate?: number; // Current interest rate (considering rate adjustments)
 }
 
 export async function generateRobustLoanPDF(loanData: LoanData, currency: Currency, startDate?: Date): Promise<Uint8Array> {
@@ -113,7 +114,9 @@ export async function generateRobustLoanPDF(loanData: LoanData, currency: Curren
     if (isPortfolio) {
       infoText = `${loanData.name} - Total: ${formatCurrency(loanData.amount, currency, 0)} - Monthly: ${formatCurrency(loanData.monthlyPayment, currency, 0)}`;
     } else {
-      infoText = `${loanData.name} - ${formatCurrency(loanData.amount, currency, 0)} - ${loanData.interestRate}% - ${Math.floor(loanData.termInMonths/12)}y ${loanData.termInMonths%12}m`;
+      // Get current interest rate from current payment (considering rate adjustments)
+      const currentInterestRate = loanData.currentInterestRate !== undefined ? loanData.currentInterestRate : loanData.interestRate;
+      infoText = `${loanData.name} - ${formatCurrency(loanData.amount, currency, 0)} - ${currentInterestRate}%`;
     }
     
     page.drawText(infoText, {
@@ -193,8 +196,8 @@ export async function generateRobustLoanPDF(loanData: LoanData, currency: Curren
     
     // 1. LOAN DETAILS SECTION
     currentPage.drawRectangle({
-      x: margin - 5, y: currentY - 100,
-      width: pageWidth - 2 * margin + 10, height: 95,
+      x: margin - 5, y: currentY - 118,
+      width: pageWidth - 2 * margin + 10, height: 113,
       color: rgb(0.95, 0.97, 0.99),
       borderColor: rgb(0.2, 0.45, 0.75),
       borderWidth: 1
@@ -212,11 +215,15 @@ export async function generateRobustLoanPDF(loanData: LoanData, currency: Curren
     });
     currentY -= 40;
     
+    // Format starting date
+    const startDateStr = startDate ? startDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
+    
     const loanDetailLines = [
       `Loan Name: ${loanData.name}`,
       `Loan Amount: ${formatCurrency(loanData.amount, currency, 0)}`,
       `Interest Rate: ${loanData.interestRate}%`,
-      `Loan Term: ${Math.floor(loanData.termInMonths/12)} years ${loanData.termInMonths%12} months`
+      `Loan Term: ${Math.floor(loanData.termInMonths/12)} years ${loanData.termInMonths%12} months`,
+      `Starting Date: ${startDateStr}`
     ];
     
     loanDetailLines.forEach((line, index) => {
@@ -226,49 +233,7 @@ export async function generateRobustLoanPDF(loanData: LoanData, currency: Curren
       });
     });
     
-    currentY -= 85;
-    
-    // CURRENT STATUS SECTION (if available)
-    if (loanData.currentBalance !== undefined || loanData.currentPaymentNumber !== undefined) {
-      currentPage.drawRectangle({
-        x: margin - 5, y: currentY - 100,
-        width: pageWidth - 2 * margin + 10, height: 95,
-        color: rgb(0.95, 0.99, 0.95),
-        borderColor: rgb(0.2, 0.65, 0.2),
-        borderWidth: 1
-      });
-      
-      currentPage.drawRectangle({
-        x: margin - 5, y: currentY - 22,
-        width: pageWidth - 2 * margin + 10, height: 20,
-        color: rgb(0.2, 0.65, 0.2)
-      });
-      
-      currentPage.drawText('Current Status', {
-        x: margin + 5, y: currentY - 13,
-        size: 12, font: helveticaBold, color: rgb(1, 1, 1)
-      });
-      currentY -= 40;
-      
-      const statusLines = [];
-      if (loanData.currentPaymentNumber !== undefined && loanData.totalPayments !== undefined) {
-        statusLines.push(`Current Payment: #${loanData.currentPaymentNumber} of ${loanData.totalPayments}`);
-      }
-      if (loanData.currentBalance !== undefined) {
-        statusLines.push(`Remaining Balance: ${formatCurrency(loanData.currentBalance, currency, 0)}`);
-      }
-      const paidOff = loanData.currentBalance !== undefined && loanData.currentBalance <= 0;
-      statusLines.push(`Status: ${paidOff ? 'PAID OFF ✓' : 'Active'}`);
-      
-      statusLines.forEach((line, index) => {
-        currentPage.drawText(line, {
-          x: margin + 15, y: currentY - (index * 18),
-          size: 9, font: helveticaBold, color: rgb(0.1, 0.4, 0.1)
-        });
-      });
-      
-      currentY -= (statusLines.length * 18) + 20;
-    }
+    currentY -= 105;
     
     // 2. PAYMENT SUMMARY SECTION
     currentPage.drawRectangle({
@@ -294,17 +259,8 @@ export async function generateRobustLoanPDF(loanData: LoanData, currency: Curren
     const totalInterest = loanData.totalPayment - loanData.amount;
     const payoffDate = loanData.payments[loanData.payments.length - 1]?.date || 'N/A';
     
-    // Determine monthly payment display based on rate adjustments
-    let monthlyPaymentText = `Monthly Payment: ${formatCurrency(loanData.monthlyPayment, currency, 0)}`;
-    if (loanData.rateAdjustments && loanData.rateAdjustments.length > 0) {
-      // Calculate payment range when there are rate adjustments
-      const payments = loanData.payments.map(p => p.principal + p.interest);
-      const minPayment = Math.min(...payments);
-      const maxPayment = Math.max(...payments);
-      if (Math.abs(maxPayment - minPayment) > 0.01) {
-        monthlyPaymentText = `Monthly Payment: ${formatCurrency(minPayment, currency, 0)} - ${formatCurrency(maxPayment, currency, 0)} (varies)`;
-      }
-    }
+    // Show only current monthly payment (already reflects rate adjustments)
+    const monthlyPaymentText = `Monthly Payment: ${formatCurrency(loanData.monthlyPayment, currency, 0)}`;
     
     const paymentSummaryLines = [
       monthlyPaymentText,

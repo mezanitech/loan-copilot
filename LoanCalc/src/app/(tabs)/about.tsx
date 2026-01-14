@@ -1,10 +1,80 @@
 import { Text, View, StyleSheet, ScrollView, Platform, TouchableOpacity, Linking } from "react-native";
 import { theme } from '../../constants/theme';
+import { useEffect, useState, useCallback } from 'react';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { getCompletionPercentage, getAchievementProgress, ACHIEVEMENTS } from '../../utils/achievementUtils';
+import { AchievementCategoryTabs, AchievementGrid } from '../../components/AchievementComponents';
+import AchievementUnlockedModal from '../../components/AchievementUnlockedModal';
+import type { AchievementProgress, AchievementCategory } from '../../utils/achievementUtils';
 
 export default function AboutScreen() {
+    const router = useRouter();
+    const [showAchievements, setShowAchievements] = useState(false);
+    const [completionPercentage, setCompletionPercentage] = useState(0);
+    const [selectedCategory, setSelectedCategory] = useState<AchievementCategory | 'all'>('all');
+    const [progressData, setProgressData] = useState<AchievementProgress[]>([]);
+    const [unlockedAchievement, setUnlockedAchievement] = useState<{
+        id: string;
+        title: string;
+        description: string;
+        icon: string;
+        tier: string;
+    } | null>(null);
+
+    useFocusEffect(
+        useCallback(() => {
+            loadAchievementData();
+        }, [])
+    );
+
+    const loadAchievementData = async () => {
+        const percentage = await getCompletionPercentage();
+        setCompletionPercentage(percentage);
+        
+        const progress = await getAchievementProgress();
+        setProgressData(progress);
+    };
+
     return (
         <ScrollView style={styles.container}>
             <Text style={styles.title}>About Loan Copilot</Text>
+            
+            {/* Achievements Section */}
+            <View style={styles.section}>
+                <View style={styles.achievementHeader}>
+                    <Text style={styles.sectionTitle}>🏆 Achievements</Text>
+                    <View style={styles.completionBadge}>
+                        <Text style={styles.completionText}>{completionPercentage}%</Text>
+                    </View>
+                </View>
+                <Text style={styles.text}>
+                    Explore all features and unlock achievements! Tap below to view your collection.
+                </Text>
+                <TouchableOpacity 
+                    style={styles.achievementsButton}
+                    onPress={() => setShowAchievements(!showAchievements)}
+                >
+                    <Text style={styles.achievementsButtonText}>
+                        {showAchievements ? '🔼 Hide Achievements' : '🔽 Show Achievements'}
+                    </Text>
+                </TouchableOpacity>
+                
+                {showAchievements && (
+                    <View style={styles.achievementsContainer}>
+                        <AchievementCategoryTabs
+                            selectedCategory={selectedCategory}
+                            onSelectCategory={setSelectedCategory}
+                            progressData={progressData}
+                            achievements={ACHIEVEMENTS}
+                        />
+                        <AchievementGrid
+                            category={selectedCategory === 'all' ? undefined : selectedCategory}
+                            progressData={progressData}
+                            achievements={ACHIEVEMENTS}
+                        />
+                    </View>
+                )}
+            </View>
             
             {/* App Version */}
             <View style={styles.section}>
@@ -137,6 +207,12 @@ export default function AboutScreen() {
             <View style={styles.footer}>
                 <Text style={styles.footerText}>Made with care to help you achieve financial freedom 🚀</Text>
             </View>
+
+            <AchievementUnlockedModal
+                achievement={unlockedAchievement}
+                visible={!!unlockedAchievement}
+                onClose={() => setUnlockedAchievement(null)}
+            />
         </ScrollView>
     );
 }
@@ -161,6 +237,39 @@ const styles = StyleSheet.create({
         fontWeight: theme.fontWeight.bold,
         marginBottom: theme.spacing.md,
         color: theme.colors.textPrimary,
+    },
+    achievementHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: theme.spacing.md,
+    },
+    completionBadge: {
+        backgroundColor: theme.colors.primary,
+        paddingHorizontal: theme.spacing.md,
+        paddingVertical: theme.spacing.xs,
+        borderRadius: theme.borderRadius.full,
+    },
+    completionText: {
+        color: 'white',
+        fontSize: theme.fontSize.sm,
+        fontWeight: theme.fontWeight.bold,
+    },
+    achievementsButton: {
+        backgroundColor: theme.colors.primary,
+        paddingVertical: theme.spacing.md,
+        paddingHorizontal: theme.spacing.lg,
+        borderRadius: theme.borderRadius.md,
+        marginTop: theme.spacing.md,
+        alignItems: 'center',
+    },
+    achievementsButtonText: {
+        color: 'white',
+        fontSize: theme.fontSize.base,
+        fontWeight: theme.fontWeight.semibold,
+    },
+    achievementsContainer: {
+        marginTop: theme.spacing.lg,
     },
     text: {
         fontSize: theme.fontSize.base,

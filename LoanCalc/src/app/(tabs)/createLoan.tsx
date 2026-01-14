@@ -15,9 +15,11 @@ import { AutoSaveIndicator, AutoSaveHandle } from "../../components/AutoSaveIndi
 // Import calculation utilities
 import { calculatePayment, generatePaymentSchedule, convertTermToMonths } from "../../utils/loanCalculations";
 // Import notification utilities
-import { schedulePaymentReminders } from "../../utils/notificationUtils";
+import { schedulePaymentReminders, scheduleNextPaymentReminder } from "../../utils/notificationUtils";
 import { getNotificationPreferences } from "../../utils/storage";
 import { formatCurrency } from "../../utils/currencyUtils";
+// Import achievement tracking
+import { incrementProgress } from "../../utils/achievementUtils";
 
 
 export default function CreateLoanScreen() {
@@ -45,7 +47,10 @@ export default function CreateLoanScreen() {
                 setLoanAmount('');
                 setInterestRate('');
                 setTerm('');
-                setDate(new Date());
+                setTermUnit('years'); // Reset to default
+                const newDate = new Date();
+                setDate(newDate);
+                dateRef.current = newDate; // Also reset the ref
                 setShowViewDetailsButton(false);
                 createdLoanId.current = null;
                 hasNavigatedAway.current = false;
@@ -186,6 +191,22 @@ export default function CreateLoanScreen() {
         const principal = parseFloat(loanAmount);
         const annualRate = parseFloat(interestRate);
         const termValue = parseFloat(term);
+        const termInMonths = convertTermToMonths(termValue, termUnit);
+
+        // Recalculate payment amounts with current values
+        const { monthlyPayment, totalPayment } = calculatePayment({ 
+            principal, 
+            annualRate, 
+            termInMonths 
+        });
+        
+        // Generate payment schedule with current values
+        const paymentSchedule = generatePaymentSchedule({ 
+            principal, 
+            annualRate, 
+            termInMonths, 
+            startDate: dateRef.current 
+        });
 
         try {
             // Get existing loans from storage
@@ -199,13 +220,12 @@ export default function CreateLoanScreen() {
             const existingLoanIndex = loans.findIndex((l: any) => l.id === loanId);
             
             // Calculate current monthly payment and remaining balance from schedule
-            const termInMonths = convertTermToMonths(termValue, termUnit);
             const currentMonthlyPayment = monthlyPayment; // For new loans, current payment is the standard monthly payment
             const remainingBalance = principal; // For new loans, remaining balance is the full principal
             
             // Calculate freedom date (when loan will be paid off)
             const freedomDate = (() => {
-                const finalDate = new Date(date);
+                const finalDate = new Date(dateRef.current);
                 finalDate.setMonth(finalDate.getMonth() + termInMonths - 1);
                 return finalDate.toISOString();
             })();
@@ -234,13 +254,12 @@ export default function CreateLoanScreen() {
             let scheduledNotificationIds: string[] = [];
             
             if (notificationPrefs.enabled) {
-                const termInMonths = convertTermToMonths(termValue, termUnit);
-                scheduledNotificationIds = await schedulePaymentReminders(
+                // Schedule only the next payment notification based on actual schedule
+                scheduledNotificationIds = await scheduleNextPaymentReminder(
                     loanId,
                     loanName,
-                    monthlyPayment,
+                    paymentSchedule,
                     getStartDate(),
-                    termInMonths,
                     notificationPrefs.reminderDays
                 );
             }
@@ -260,6 +279,9 @@ export default function CreateLoanScreen() {
                 // Store the loan ID so subsequent saves update instead of create
                 createdLoanId.current = loanId;
                 setShowViewDetailsButton(true);
+                
+                // Track achievement: first loan created
+                await incrementProgress('loans_created');
             }
             
             // Save back to storage
@@ -386,7 +408,11 @@ export default function CreateLoanScreen() {
         {showViewDetailsButton && createdLoanId.current && (
             <TouchableOpacity 
                 style={styles.viewDetailsButton}
-                onPress={() => router.push(`/(tabs)/${createdLoanId.current}/overview`)}
+                onPress={async () => {
+                    // Save loan immediately before navigation to ensure latest data is persisted
+                    await saveLoan();
+                    router.push(`/(tabs)/${createdLoanId.current}/overview`);
+                }}
                 activeOpacity={0.8}
             >
                 <Text style={styles.viewDetailsButtonText}> View Loan Details</Text>

@@ -3,6 +3,7 @@ import { EarlyPayment } from '../components/EarlyPaymentList';
 export type RateAdjustment = {
     month: number;       // Month when rate changes (1-indexed)
     newRate: number;     // New annual interest rate (as percentage, e.g., 5 for 5%)
+    date?: string;       // Optional: exact date (YYYY-MM-DD) - if provided, month is calculated from this
 };
 
 export type LoanParams = {
@@ -51,8 +52,8 @@ export type SavingsCalculation = {
  * @returns Monthly payment and total payment
  */
 export function calculatePayment({ principal, annualRate, termInMonths }: LoanParams): PaymentCalculation {
-    // Validate inputs
-    if (!principal || !annualRate || !termInMonths || principal <= 0 || annualRate < 0 || termInMonths <= 0) {
+    // Validate inputs - allow 0% interest rate
+    if (principal == null || annualRate == null || termInMonths == null || principal <= 0 || annualRate < 0 || termInMonths <= 0) {
         return { monthlyPayment: 0, totalPayment: 0 };
     }
 
@@ -201,10 +202,7 @@ export function generatePaymentSchedule({
         if (earlyPaymentAmount > 0) {
             console.log(`Month ${currentMonth}: Processing early payment of ${earlyPaymentAmount} BEFORE regular payment`);
             console.log(`  Balance BEFORE early payment: ${balance.toFixed(2)}`);
-            
-            // Calculate interest on current balance with current rate
-            const earlyPaymentInterest = balance * monthlyRate;
-            
+                        
             // Apply early payment principal (early payment - interest on that early payment's portion)
             const earlyPaymentPrincipal = Math.min(earlyPaymentAmount, balance);
             balance -= earlyPaymentPrincipal;
@@ -227,19 +225,33 @@ export function generatePaymentSchedule({
         // STEP 2: Check if rate adjusts this month
         const rateChange = sortedRateAdjustments.find(adj => adj.month === currentMonth);
         if (rateChange) {
-            console.log(`Month ${currentMonth}: Rate change from ${currentRate}% to ${rateChange.newRate}%`);
+            // Calculate payment date for this month
+            const paymentDate = new Date(startDate);
+            paymentDate.setMonth(startDate.getMonth() + i);
+            const paymentDateStr = paymentDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+            
+            console.log(`\n📊 RATE CHANGE DETECTED:`);
+            console.log(`  Payment #${currentMonth} - ${paymentDateStr}`);
+            if (rateChange.date) {
+                console.log(`  Rate change date (stored): ${rateChange.date}`);
+            }
+            console.log(`  Rate: ${currentRate}% → ${rateChange.newRate}%`);
+            console.log(`  Balance when rate changes: ${balance.toFixed(2)}`);
             
             // Detect if both early payment and rate change happen same month
             if (earlyPaymentAmount > 0) {
-                console.log(`  ⚠️ SCENARIO DETECTED: Both early payment AND rate change in month ${currentMonth}`);
+                console.log(`  ⚠️ SCENARIO: Both early payment ($${earlyPaymentAmount}) AND rate change in same month`);
             }
             
             // Update to new rate
             currentRate = rateChange.newRate;
             monthlyRate = currentRate / 100 / 12;
             
-            // STEP 3: Recalculate monthly payment ONLY when rate changes
-            // (balance may have been reduced by early payment, rate has changed)
+            // STEP 3: Recalculate monthly payment when rate changes
+            // If there was an early payment, remainingMonths was modified by projection
+            // For rate changes, we should use the early-payment-adjusted remainingMonths if it exists,
+            // otherwise use the actual remaining months
+            // This handles both scenarios: rate change alone, or rate change + early payment
             monthlyPayment = calculatePayment({
                 principal: balance,
                 annualRate: currentRate,
@@ -247,6 +259,7 @@ export function generatePaymentSchedule({
             }).monthlyPayment;
             
             console.log(`  New monthly payment: ${monthlyPayment.toFixed(2)}`);
+            console.log(`  Remaining months: ${remainingMonths}\n`);
         }
 
         // STEP 4: Process regular monthly payment

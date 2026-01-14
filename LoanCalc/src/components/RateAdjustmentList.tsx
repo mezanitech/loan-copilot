@@ -177,9 +177,11 @@ const RateAdjustmentList = forwardRef<RateAdjustmentListRef, RateAdjustmentListP
     const handleMonthChange = (event: any, selectedDate: Date | undefined, adjustmentId: string) => {
         if (selectedDate) {
             // Calculate the payment month number based on loan start date
+            // Month difference tells us which payment this is
+            // e.g., Aug 27 (start) -> Nov 27 is 3 months later, which is payment #3
             const yearDiff = selectedDate.getFullYear() - loanStartDate.getFullYear();
             const monthDiff = selectedDate.getMonth() - loanStartDate.getMonth();
-            const totalMonthDiff = (yearDiff * 12) + monthDiff + 1; // +1 because first payment is month 1
+            const totalMonthDiff = (yearDiff * 12) + monthDiff;
             
             // Restrict to valid months (2 to loanTermInMonths)
             if (totalMonthDiff >= 2 && totalMonthDiff <= loanTermInMonths) {
@@ -207,17 +209,25 @@ const RateAdjustmentList = forwardRef<RateAdjustmentListRef, RateAdjustmentListP
         }
     };
 
-    const getMonthDisplay = (monthStr: string): string => {
+    const getMonthDisplay = (monthStr: string, adjustment?: RateAdjustment): string => {
         if (!monthStr) return "Select Month";
         const paymentMonth = parseInt(monthStr);
         if (isNaN(paymentMonth) || paymentMonth < 2) return "Select Month";
         
-        // Always use 1st of month since rate adjustments apply to entire months
-        const actualDate = new Date(
-            loanStartDate.getFullYear(),
-            loanStartDate.getMonth() + paymentMonth - 1,
-            1
-        );
+        // If adjustment has a date, use it to get the exact month
+        let actualDate: Date;
+        if (adjustment?.date) {
+            const [year, month, day] = adjustment.date.split('-').map(Number);
+            actualDate = new Date(year, month - 1, day);
+        } else {
+            // Calculate date from payment month number
+            // paymentMonth represents months elapsed from start (not month index)
+            actualDate = new Date(
+                loanStartDate.getFullYear(),
+                loanStartDate.getMonth() + paymentMonth,
+                loanStartDate.getDate()
+            );
+        }
         
         const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
         const monthName = monthNames[actualDate.getMonth()];
@@ -293,7 +303,7 @@ const RateAdjustmentList = forwardRef<RateAdjustmentListRef, RateAdjustmentListP
                         </Text>
                         {isComplete && (
                             <Text style={styles.adjustmentSummary}>
-                                {adjustment.newRate}% • {getMonthDisplay(adjustment.month)}
+                                {adjustment.newRate}% • {getMonthDisplay(adjustment.month, adjustment)}
                             </Text>
                         )}
                     </View>
@@ -375,7 +385,7 @@ const RateAdjustmentList = forwardRef<RateAdjustmentListRef, RateAdjustmentListP
                                             style={styles.monthPickerButton}
                                             onPress={() => setActiveMonthPicker(adjustment.id)}
                                         >
-                                            <Text style={styles.monthPickerText}>{getMonthDisplay(adjustment.month)}</Text>
+                                            <Text style={styles.monthPickerText}>{getMonthDisplay(adjustment.month, adjustment)}</Text>
                                         </TouchableOpacity>
                                         {activeMonthPicker === adjustment.id && (
                                             <DatePicker

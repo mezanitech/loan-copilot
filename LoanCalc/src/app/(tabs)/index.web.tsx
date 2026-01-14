@@ -87,7 +87,9 @@ export default function DashboardScreen() {
                     onPress: async () => {
                         try {
                             for (const loan of loans) {
-                                await cancelLoanNotifications(loan.id);
+                                if (loan.scheduledNotificationIds && loan.scheduledNotificationIds.length > 0) {
+                                    await cancelLoanNotifications(loan.scheduledNotificationIds);
+                                }
                             }
                             await AsyncStorage.setItem('loans', JSON.stringify([]));
                             setLoans([]);
