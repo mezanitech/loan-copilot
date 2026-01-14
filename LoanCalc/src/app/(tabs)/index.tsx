@@ -1,4 +1,3 @@
-// Import necessary components and hooks from React Native and Expo Router
 import { Link, useFocusEffect, useRouter } from "expo-router";
 import { useState, useCallback, useMemo } from "react";
 import { Text, View, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, Image, Platform, ActivityIndicator } from "react-native";
@@ -13,6 +12,7 @@ import { getCurrencyPreference, Currency, getNotificationPreferences } from '../
 import { formatCurrency } from '../../utils/currencyUtils';
 import { updateProgress } from '../../utils/achievementUtils';
 import { generatePaymentSchedule } from '../../utils/loanCalculations';
+import { smartPromptForReview } from '../../utils/ratingUtils';
 
 // Only import PDF generation on native platforms
 const generateRobustLoanPDF = Platform.OS !== 'web' 
@@ -65,6 +65,11 @@ export default function DashboardScreen() {
                 
                 // Track achievement: max active loans
                 await updateProgress('max_active_loans', loadedLoans.length);
+                
+                // Smart prompt for review after 3 loans created
+                if (loadedLoans.length >= 3) {
+                    setTimeout(() => smartPromptForReview(), 2000);
+                }
             }
         } catch (error) {
             console.error('Failed to load loans:', error);

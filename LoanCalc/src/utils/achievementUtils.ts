@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
+import { smartPromptForReview } from './ratingUtils';
 
 // Achievement tier type
 export type AchievementTier = 'bronze' | 'silver' | 'gold' | 'platinum';
@@ -291,6 +292,12 @@ export async function updateProgress(progressKey: string, value: number): Promis
     }
     
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+    
+    // Smart prompt for app review after 5 achievements unlocked
+    if (unlockedCount >= 5) {
+      setTimeout(() => smartPromptForReview(), 1000);
+    }
+    
     return newlyUnlocked;
   } catch (error) {
     console.error('Error updating progress:', error);

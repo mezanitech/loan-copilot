@@ -1,10 +1,11 @@
-import { Text, View, StyleSheet, ScrollView, Platform, TouchableOpacity, Linking } from "react-native";
+import { Text, View, StyleSheet, ScrollView, Platform, TouchableOpacity, Linking, Alert } from "react-native";
 import { theme } from '../../constants/theme';
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { getCompletionPercentage, getAchievementProgress, ACHIEVEMENTS } from '../../utils/achievementUtils';
 import { AchievementCategoryTabs, AchievementGrid } from '../../components/AchievementComponents';
 import AchievementUnlockedModal from '../../components/AchievementUnlockedModal';
+import { openAppStore } from '../../utils/ratingUtils';
 import type { AchievementProgress, AchievementCategory } from '../../utils/achievementUtils';
 
 export default function AboutScreen() {
@@ -33,6 +34,22 @@ export default function AboutScreen() {
         
         const progress = await getAchievementProgress();
         setProgressData(progress);
+    };
+
+    const handleRateApp = async () => {
+        Alert.alert(
+            'Enjoying Loan Copilot?',
+            'Your feedback helps us improve and helps others discover the app!',
+            [
+                { text: 'Maybe Later', style: 'cancel' },
+                {
+                    text: 'Rate on App Store',
+                    onPress: async () => {
+                        await openAppStore();
+                    }
+                }
+            ]
+        );
     };
 
     return (
@@ -164,6 +181,21 @@ export default function AboutScreen() {
                     or store any of your personal or financial information on external servers. Your data 
                     remains private and under your control.
                 </Text>
+            </View>
+
+            {/* Rate the App */}
+            <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Love Loan Copilot?</Text>
+                <Text style={styles.text}>
+                    If you're finding this app helpful, please consider leaving a rating on the App Store. 
+                    Your support helps us continue improving and helps others discover Loan Copilot!
+                </Text>
+                <TouchableOpacity 
+                    style={styles.rateButton}
+                    onPress={handleRateApp}
+                >
+                    <Text style={styles.rateButtonText}>⭐ Rate This App</Text>
+                </TouchableOpacity>
             </View>
 
             {/* Feedback */}
@@ -341,6 +373,19 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     feedbackButtonText: {
+        color: 'white',
+        fontSize: theme.fontSize.base,
+        fontWeight: theme.fontWeight.semibold,
+    },
+    rateButton: {
+        backgroundColor: '#FFB800',
+        paddingVertical: theme.spacing.md,
+        paddingHorizontal: theme.spacing.lg,
+        borderRadius: theme.borderRadius.md,
+        marginTop: theme.spacing.md,
+        alignItems: 'center',
+    },
+    rateButtonText: {
         color: 'white',
         fontSize: theme.fontSize.base,
         fontWeight: theme.fontWeight.semibold,
