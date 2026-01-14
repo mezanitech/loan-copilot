@@ -638,7 +638,7 @@ export async function generateRobustLoanPDF(loanData: LoanData, currency: Curren
       formatCurrency(payment.interest, currency, 0), // Remaining balance
       formatCurrency(payment.balance, currency, 0), // Monthly payment
       `${payment.interestRate}%`, // Rate
-      payment.startDate ? new Date(payment.startDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'N/A', // Start date
+      payment.startDate ? (() => { const [y, m, d] = payment.startDate.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }); })() : 'N/A', // Start date
       payment.freedomDate ? new Date(payment.freedomDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'N/A' // Freedom day
     ] : [
       (payment.number).toString(),
@@ -712,7 +712,8 @@ export async function generateRobustLoanPDF(loanData: LoanData, currency: Curren
               if (ep.month && payment.startDate) {
                 const monthNum = parseInt(ep.month);
                 if (!isNaN(monthNum)) {
-                  const epDate = new Date(payment.startDate);
+                  const [y, m, d] = payment.startDate.split('-').map(Number);
+                  const epDate = new Date(y, m - 1, d);
                   epDate.setMonth(epDate.getMonth() + monthNum - 1);
                   epDateText = ` - ${epDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`;
                 }
@@ -759,7 +760,8 @@ export async function generateRobustLoanPDF(loanData: LoanData, currency: Curren
               if (ra.month && payment.startDate) {
                 const monthNum = parseInt(ra.month);
                 if (!isNaN(monthNum)) {
-                  const raDate = new Date(payment.startDate);
+                  const [y, m, d] = payment.startDate.split('-').map(Number);
+                  const raDate = new Date(y, m - 1, d);
                   raDate.setMonth(raDate.getMonth() + monthNum - 1);
                   raDateText = raDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
                 }

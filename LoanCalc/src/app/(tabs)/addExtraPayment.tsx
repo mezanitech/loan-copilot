@@ -55,7 +55,9 @@ export default function AddExtraPaymentScreen() {
         }
 
         // Calculate months elapsed since loan start
-        const startDate = new Date(loan.startDate);
+        // Parse date in local time to avoid timezone shifts
+        const [year, month, day] = loan.startDate.split('-').map(Number);
+        const startDate = new Date(year, month - 1, day);
         const currentDate = new Date();
         const monthsElapsed = Math.max(0,
             (currentDate.getFullYear() - startDate.getFullYear()) * 12 +
@@ -79,7 +81,9 @@ export default function AddExtraPaymentScreen() {
 
     // Calculate remaining principal for a loan
     const calculateRemainingPrincipal = (loan: Loan): number => {
-        const startDate = new Date(loan.startDate);
+        // Parse date in local time to avoid timezone shifts
+        const [year, month, day] = loan.startDate.split('-').map(Number);
+        const startDate = new Date(year, month - 1, day);
         const currentDate = new Date();
         const monthsPassed = Math.max(0, 
             (currentDate.getFullYear() - startDate.getFullYear()) * 12 + 

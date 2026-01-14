@@ -11,6 +11,7 @@ export type EarlyPayment = {
     type: "one-time" | "recurring";
     amount: string;
     month: string; // Payment month for one-time, starting month for recurring
+    date?: string; // Optional: exact date in YYYY-MM-DD format to preserve user's selected day
     frequency?: string; // Only for recurring: every X months (1, 2, 3, etc.)
 };
 
@@ -169,7 +170,17 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
             
             // Restrict to valid payment months (1 to loanTermInMonths)
             if (totalMonthDiff >= 1 && totalMonthDiff <= loanTermInMonths) {
-                updatePayment(paymentId, "month", totalMonthDiff.toString());
+                // Store the exact date to preserve the day
+                const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
+                
+                // Update both month and date in a single state update
+                if (draftPayment && paymentId === draftPayment.id) {
+                    setDraftPayment({ 
+                        ...draftPayment, 
+                        month: totalMonthDiff.toString(),
+                        date: dateStr
+                    });
+                }
             }
         }
     };
@@ -179,9 +190,12 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
         const paymentMonth = parseInt(monthStr);
         if (isNaN(paymentMonth) || paymentMonth < 1) return "Select Month";
         
-        // Calculate the actual date from payment month and loan start date
-        const actualDate = new Date(loanStartDate.getTime()); // Proper clone
-        actualDate.setMonth(actualDate.getMonth() + paymentMonth - 1);
+        // Always use 1st of month since payments apply to entire payment periods
+        const actualDate = new Date(
+            loanStartDate.getFullYear(),
+            loanStartDate.getMonth() + paymentMonth - 1,
+            1
+        );
         
         const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
         const monthName = monthNames[actualDate.getMonth()];
@@ -190,24 +204,40 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
         return `${monthName} ${year} (Payment #${paymentMonth})`;
     };
 
-    const getDateForMonth = (monthStr: string): Date => {
-        const paymentMonth = parseInt(monthStr) || 1;
-        // Calculate actual date from loan start date and payment month
-        const actualDate = new Date(loanStartDate.getTime()); // Proper clone
-        actualDate.setMonth(actualDate.getMonth() + paymentMonth - 1);
+    const getDateForMonth = (payment: EarlyPayment): Date => {
+        // If we have a stored date, use it to preserve the exact day
+        if (payment.date) {
+            const [year, month, day] = payment.date.split('-').map(Number);
+            return new Date(year, month - 1, day);
+        }
+        
+        // Fallback: calculate from payment month (will use 1st of month)
+        const paymentMonth = parseInt(payment.month) || 1;
+        const actualDate = new Date(
+            loanStartDate.getFullYear(),
+            loanStartDate.getMonth() + paymentMonth - 1,
+            1
+        );
         return actualDate;
     };
 
     const getMinDate = (): Date => {
-        // First payment date (one month after loan start)
-        const minDate = new Date(loanStartDate.getTime()); // Proper clone
+        // First payment date - always use 1st of month
+        const minDate = new Date(
+            loanStartDate.getFullYear(),
+            loanStartDate.getMonth(),
+            1
+        );
         return minDate;
     };
 
     const getMaxDate = (): Date => {
-        // Last payment date
-        const maxDate = new Date(loanStartDate.getTime()); // Proper clone
-        maxDate.setMonth(maxDate.getMonth() + loanTermInMonths - 1);
+        // Last payment date - always use 1st of month
+        const maxDate = new Date(
+            loanStartDate.getFullYear(),
+            loanStartDate.getMonth() + loanTermInMonths - 1,
+            1
+        );
         return maxDate;
     };
 
@@ -349,7 +379,7 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
                                             {activeMonthPicker === payment.id && (
                                                 <DatePicker
                                                     visible={true}
-                                                    value={getDateForMonth(payment.month)}
+                                                    value={getDateForMonth(payment)}
                                                     onChange={(event, date) => handleMonthChange(event, date, payment.id)}
                                                     onClose={() => setActiveMonthPicker(null)}
                                                 />
@@ -370,7 +400,7 @@ const EarlyPaymentList = forwardRef<EarlyPaymentListRef, EarlyPaymentListProps>(
                                                 {activeMonthPicker === payment.id && (
                                                     <DatePicker
                                                         visible={true}
-                                                        value={getDateForMonth(payment.month)}
+                                                        value={getDateForMonth(payment)}
                                                         onChange={(event, date) => handleMonthChange(event, date, payment.id)}
                                                         onClose={() => setActiveMonthPicker(null)}
                                                     />

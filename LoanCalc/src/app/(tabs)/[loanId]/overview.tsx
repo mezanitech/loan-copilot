@@ -89,8 +89,14 @@ export default function LoanOverviewScreen() {
         // Update date if a valid date was selected
         if (selectedDate) {
             setDate(selectedDate);
-            triggerAutoSave();
         }
+    };
+
+    // Handle date picker close - trigger save after picker is closed
+    const onDatePickerClose = () => {
+        setShowDatePicker(false);
+        // Trigger save after picker closes to ensure state is updated
+        setTimeout(() => triggerAutoSave(), 100);
     };
 
     // Format date as YYYY-MM-DD for storage
@@ -132,7 +138,7 @@ export default function LoanOverviewScreen() {
                     autoSaveRef.current.forceSave();
                 }
             };
-        }, [loanName, loanAmount, interestRate, term, termUnit, date, earlyPayments, rateAdjustments])
+        }, [loanName, loanAmount, interestRate, term, termUnit, date])
     );
 
     const loadCurrency = async () => {
@@ -175,7 +181,9 @@ export default function LoanOverviewScreen() {
                     setTerm(loan.term.toString());
                     setTermUnit(loan.termUnit);
                     if (loan.startDate) {
-                        const parsedDate = new Date(loan.startDate);
+                        // Parse date in local time to avoid timezone shifts
+                        const [year, month, day] = loan.startDate.split('-').map(Number);
+                        const parsedDate = new Date(year, month - 1, day);
                         // Validate date is not invalid (Unix epoch or invalid date)
                         if (!isNaN(parsedDate.getTime()) && parsedDate.getFullYear() > 1970) {
                             setDate(parsedDate);

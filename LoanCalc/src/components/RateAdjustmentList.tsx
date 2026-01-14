@@ -9,6 +9,7 @@ export type RateAdjustment = {
     id: string;
     name?: string;
     month: string; // Month number when rate changes (2+, 1-indexed)
+    date?: string; // Optional: exact date in YYYY-MM-DD format to preserve user's selected day
     newRate: string; // New interest rate as string for form input
 };
 
@@ -182,7 +183,26 @@ const RateAdjustmentList = forwardRef<RateAdjustmentListRef, RateAdjustmentListP
             
             // Restrict to valid months (2 to loanTermInMonths)
             if (totalMonthDiff >= 2 && totalMonthDiff <= loanTermInMonths) {
-                updateAdjustment(adjustmentId, "month", totalMonthDiff.toString());
+                // Store the exact date to preserve the day
+                const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
+                
+                // Update both month and date in a single state update
+                if (draftAdjustment && adjustmentId === draftAdjustment.id) {
+                    // Check for duplicate month
+                    if (isMonthUsed(totalMonthDiff.toString(), adjustmentId)) {
+                        Alert.alert(
+                            'Duplicate Month',
+                            'This month already has a rate adjustment. Please choose a different month.',
+                            [{ text: 'OK' }]
+                        );
+                        return;
+                    }
+                    setDraftAdjustment({ 
+                        ...draftAdjustment, 
+                        month: totalMonthDiff.toString(),
+                        date: dateStr
+                    });
+                }
             }
         }
     };
@@ -192,9 +212,12 @@ const RateAdjustmentList = forwardRef<RateAdjustmentListRef, RateAdjustmentListP
         const paymentMonth = parseInt(monthStr);
         if (isNaN(paymentMonth) || paymentMonth < 2) return "Select Month";
         
-        // Calculate the actual date from payment month and loan start date
-        const actualDate = new Date(loanStartDate.getTime()); // Proper clone
-        actualDate.setMonth(actualDate.getMonth() + paymentMonth - 1);
+        // Always use 1st of month since rate adjustments apply to entire months
+        const actualDate = new Date(
+            loanStartDate.getFullYear(),
+            loanStartDate.getMonth() + paymentMonth - 1,
+            1
+        );
         
         const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
         const monthName = monthNames[actualDate.getMonth()];
@@ -203,27 +226,40 @@ const RateAdjustmentList = forwardRef<RateAdjustmentListRef, RateAdjustmentListP
         return `${monthName} ${year} (Payment #${paymentMonth})`;
     };
 
-    const getDateForMonth = (monthStr: string): Date => {
-        console.log('[RATE_ADJ] getDateForMonth called, loanStartDate:', loanStartDate.toISOString());
-        const paymentMonth = parseInt(monthStr) || 2;
-        // Calculate actual date from loan start date and payment month
-        const actualDate = new Date(loanStartDate.getTime()); // Proper clone
-        actualDate.setMonth(actualDate.getMonth() + paymentMonth - 1);
-        console.log('[RATE_ADJ] Calculated date for month', paymentMonth, ':', actualDate.toISOString());
+    const getDateForMonth = (adjustment: RateAdjustment): Date => {
+        // If we have a stored date, use it to preserve the exact day
+        if (adjustment.date) {
+            const [year, month, day] = adjustment.date.split('-').map(Number);
+            return new Date(year, month - 1, day);
+        }
+        
+        // Fallback: calculate from payment month (will use 1st of month)
+        const paymentMonth = parseInt(adjustment.month) || 2;
+        const actualDate = new Date(
+            loanStartDate.getFullYear(),
+            loanStartDate.getMonth() + paymentMonth - 1,
+            1
+        );
         return actualDate;
     };
 
     const getMinDate = (): Date => {
-        // Second payment month (month 2)
-        const minDate = new Date(loanStartDate.getTime()); // Proper clone
-        minDate.setMonth(minDate.getMonth() + 1); // +1 for month 2
+        // Second payment month (month 2) - always use 1st of month
+        const minDate = new Date(
+            loanStartDate.getFullYear(),
+            loanStartDate.getMonth() + 1,
+            1
+        );
         return minDate;
     };
 
     const getMaxDate = (): Date => {
-        // Last payment date
-        const maxDate = new Date(loanStartDate.getTime()); // Proper clone
-        maxDate.setMonth(maxDate.getMonth() + loanTermInMonths - 1);
+        // Last payment date - always use 1st of month
+        const maxDate = new Date(
+            loanStartDate.getFullYear(),
+            loanStartDate.getMonth() + loanTermInMonths - 1,
+            1
+        );
         return maxDate;
     };
 
@@ -344,7 +380,7 @@ const RateAdjustmentList = forwardRef<RateAdjustmentListRef, RateAdjustmentListP
                                         {activeMonthPicker === adjustment.id && (
                                             <DatePicker
                                                 visible={true}
-                                                value={getDateForMonth(adjustment.month)}
+                                                value={getDateForMonth(adjustment)}
                                                 onChange={(event, date) => handleMonthChange(event, date, adjustment.id)}
                                                 onClose={() => setActiveMonthPicker(null)}
                                                 minimumDate={getMinDate()}

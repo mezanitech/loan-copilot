@@ -57,7 +57,9 @@ export default function PaymentsScreen() {
                 const loan = loans.find((l: any) => l.id === loanId);
                 if (loan) {
                     if (loan.startDate) {
-                        setStartDate(new Date(loan.startDate));
+                        // Parse date in local time to avoid timezone shifts
+                        const [year, month, day] = loan.startDate.split('-').map(Number);
+                        setStartDate(new Date(year, month - 1, day));
                     }
                     setLoanAmount(loan.amount.toString());
                     // Calculate term in months
@@ -90,8 +92,9 @@ export default function PaymentsScreen() {
                     rateAdjustmentsRef.current = loadedRateAdjustments;
                     
                     if (loan.startDate) {
-                        const parsedDate = new Date(loan.startDate);
-                        setStartDate(parsedDate);
+                        // Parse date in local time to avoid timezone shifts
+                        const [year, month, day] = loan.startDate.split('-').map(Number);
+                        setStartDate(new Date(year, month - 1, day));
                     }
                     setLoanAmount(loan.amount.toString());
                     // Calculate term in months
@@ -128,17 +131,20 @@ export default function PaymentsScreen() {
                 }));
                 
                 // Generate payment schedule with adjustments
+                // Parse date in local time to avoid timezone shifts
+                const [year, month, day] = existingLoan.startDate.split('-').map(Number);
+                const loanStartDate = new Date(year, month - 1, day);
                 const schedule = generatePaymentSchedule({
                     principal,
                     annualRate,
                     termInMonths,
-                    startDate: new Date(existingLoan.startDate),
+                    startDate: loanStartDate,
                     earlyPayments: earlyPaymentsRef.current,
                     rateAdjustments: rateAdjustmentsForCalc
                 });
                 
                 // Calculate current monthly payment from schedule
-                const monthsElapsed = Math.max(0, Math.floor((Date.now() - new Date(existingLoan.startDate).getTime()) / (1000 * 60 * 60 * 24 * 30.44)));
+                const monthsElapsed = Math.max(0, Math.floor((Date.now() - loanStartDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44)));
                 const { monthlyPayment } = calculatePayment({ principal, annualRate, termInMonths });
                 const currentMonthlyPayment = schedule.length === 0 || monthsElapsed >= schedule.length
                     ? monthlyPayment
@@ -153,7 +159,7 @@ export default function PaymentsScreen() {
                 
                 // Calculate freedom date
                 const freedomDate = schedule.length > 0 ? (() => {
-                    const finalDate = new Date(existingLoan.startDate);
+                    const finalDate = new Date(loanStartDate);
                     finalDate.setMonth(finalDate.getMonth() + schedule.length - 1);
                     return finalDate.toISOString();
                 })() : null;

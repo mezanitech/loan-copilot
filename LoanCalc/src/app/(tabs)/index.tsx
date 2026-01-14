@@ -243,7 +243,9 @@ export default function DashboardScreen() {
         }
 
         // Calculate months elapsed since loan start
-        const startDate = new Date(loan.startDate);
+        // Parse date in local time to avoid timezone shifts
+        const [year, month, day] = loan.startDate.split('-').map(Number);
+        const startDate = new Date(year, month - 1, day);
         const currentDate = new Date();
         const monthsElapsed = Math.max(0,
             (currentDate.getFullYear() - startDate.getFullYear()) * 12 +
@@ -267,7 +269,9 @@ export default function DashboardScreen() {
     
     // Calculate remaining principal for all loans
     const calculateRemainingPrincipal = (loan: Loan): number => {
-        const startDate = new Date(loan.startDate);
+        // Parse date in local time to avoid timezone shifts
+        const [year, month, day] = loan.startDate.split('-').map(Number);
+        const startDate = new Date(year, month - 1, day);
         const currentDate = new Date();
         const monthsPassed = Math.max(0, 
             (currentDate.getFullYear() - startDate.getFullYear()) * 12 + 
@@ -512,7 +516,7 @@ export default function DashboardScreen() {
                                         <View style={styles.loanDetails}>
                                             <View style={styles.detailRow}>
                                                 <Text style={styles.detailLabel}>Start Date</Text>
-                                                <Text style={styles.detailValue}>{new Date(loan.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</Text>
+                                                <Text style={styles.detailValue}>{(() => { const [y, m, d] = loan.startDate.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); })()}</Text>
                                             </View>
                                             {loan.freedomDate && (
                                                 <View style={styles.detailRow}>

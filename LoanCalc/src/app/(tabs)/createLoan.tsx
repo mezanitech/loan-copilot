@@ -28,6 +28,7 @@ export default function CreateLoanScreen() {
     const [term, setTerm] = useState("");
     const [termUnit, setTermUnit] = useState<"months" | "years">("years"); // Can be months or years
     const [date, setDate] = useState(new Date());
+    const dateRef = useRef(new Date()); // Track current date immediately
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [showViewDetailsButton, setShowViewDetailsButton] = useState(false); // Show button after loan is created
     const createdLoanId = useRef<string | null>(null); // Track created loan ID
@@ -124,15 +125,23 @@ export default function CreateLoanScreen() {
     const onDateChange = (event: any, selectedDate?: Date) => {
         if (selectedDate) {
             setDate(selectedDate);
-            triggerAutoSave();
+            dateRef.current = selectedDate; // Store immediately in ref
         }
+    };
+
+    // Handle date picker close - trigger save after picker is closed
+    const onDatePickerClose = () => {
+        setShowDatePicker(false);
+        // Trigger save after picker closes to ensure state is updated
+        setTimeout(() => triggerAutoSave(), 500);
     };
 
     // Format date as YYYY-MM-DD for storage
     const getStartDate = (): string => {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
+        const currentDate = dateRef.current; // Use ref to get latest value
+        const year = currentDate.getFullYear();
+        const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+        const day = String(currentDate.getDate()).padStart(2, '0');
         return `${year}-${month}-${day}`;
     };
 
@@ -343,7 +352,7 @@ export default function CreateLoanScreen() {
             visible={showDatePicker}
             value={date}
             onChange={onDateChange}
-            onClose={() => setShowDatePicker(false)}
+            onClose={onDatePickerClose}
         />
 
         {/* Show payment summary if calculation is complete */}
