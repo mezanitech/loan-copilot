@@ -3,7 +3,7 @@
     "name": "Loan Co-Pilot",
     "slug": "loan-copilot",
     "scheme": "loancopilot",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -44,7 +44,6 @@
       "expo-asset",
       "@react-native-community/datetimepicker",
       "expo-font",
-      "expo-store-review",
       [
         "expo-notifications",
         {
