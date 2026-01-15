@@ -23,9 +23,19 @@ const LOANS_STORAGE_KEY = 'loans';
 export async function getAllLoans(): Promise<Loan[]> {
     try {
         const loansData = await AsyncStorage.getItem(LOANS_STORAGE_KEY);
-        return loansData ? JSON.parse(loansData) : [];
+        if (!loansData) {
+            return [];
+        }
+        const parsedLoans = JSON.parse(loansData);
+        // Validate that parsed data is an array
+        if (!Array.isArray(parsedLoans)) {
+            console.error('Invalid loans data format, resetting to empty array');
+            return [];
+        }
+        return parsedLoans;
     } catch (error) {
         console.error('Error loading loans:', error);
+        // Return empty array on JSON parse error
         return [];
     }
 }
@@ -123,9 +133,10 @@ export async function getNotificationPreferences(): Promise<{ enabled: boolean; 
     try {
         const enabled = await AsyncStorage.getItem('@notifications_enabled');
         const reminderDays = await AsyncStorage.getItem('@notification_reminder_days');
+        const parsedReminderDays = reminderDays ? parseInt(reminderDays, 10) : 3;
         return {
             enabled: enabled === 'true',
-            reminderDays: reminderDays ? parseInt(reminderDays) : 3
+            reminderDays: isNaN(parsedReminderDays) ? 3 : parsedReminderDays
         };
     } catch (error) {
         console.error('Error loading notification preferences:', error);

@@ -53,7 +53,9 @@ export type SavingsCalculation = {
  */
 export function calculatePayment({ principal, annualRate, termInMonths }: LoanParams): PaymentCalculation {
     // Validate inputs - allow 0% interest rate
-    if (principal == null || annualRate == null || termInMonths == null || principal <= 0 || annualRate < 0 || termInMonths <= 0) {
+    if (principal == null || annualRate == null || termInMonths == null || 
+        isNaN(principal) || isNaN(annualRate) || isNaN(termInMonths) ||
+        principal <= 0 || annualRate < 0 || termInMonths <= 0) {
         return { monthlyPayment: 0, totalPayment: 0 };
     }
 

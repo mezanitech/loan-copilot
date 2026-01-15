@@ -24,6 +24,13 @@ jest.mock('expo-notifications', () => ({
   setNotificationHandler: jest.fn(),
 }));
 
+// Mock expo-store-review
+jest.mock('expo-store-review', () => ({
+  isAvailableAsync: jest.fn(() => Promise.resolve(false)),
+  requestReview: jest.fn(() => Promise.resolve()),
+  storeUrl: jest.fn(() => Promise.resolve('https://apps.apple.com/app/id6757390003')),
+}));
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { 
   initializeAchievements, 

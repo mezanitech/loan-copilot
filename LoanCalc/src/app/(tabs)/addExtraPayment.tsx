@@ -41,10 +41,19 @@ export default function AddExtraPaymentScreen() {
         try {
             const storedLoans = await AsyncStorage.getItem('loans');
             if (storedLoans) {
-                setLoans(JSON.parse(storedLoans));
+                const parsedLoans = JSON.parse(storedLoans);
+                // Validate that parsed data is an array
+                if (Array.isArray(parsedLoans)) {
+                    setLoans(parsedLoans);
+                } else {
+                    console.error('Invalid loans data format');
+                    setLoans([]);
+                }
             }
         } catch (error) {
             console.error('Failed to load loans:', error);
+            // Set empty array on parse error to prevent crash
+            setLoans([]);
         }
     };
 

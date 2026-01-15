@@ -55,18 +55,35 @@ export default function PaymentsScreen() {
             const loansData = await AsyncStorage.getItem('loans');
             if (loansData) {
                 const loans = JSON.parse(loansData);
-                const loan = loans.find((l: any) => l.id === loanId);
+                if (!Array.isArray(loans)) {
+                    console.error('Invalid loans data');
+                    return;
+                }
+                const loan = loans.find((l: any) => l?.id === loanId);
                 if (loan) {
-                    if (loan.startDate) {
-                        // Parse date in local time to avoid timezone shifts
-                        const [year, month, day] = loan.startDate.split('-').map(Number);
-                        setStartDate(new Date(year, month - 1, day));
+                    if (loan.startDate && typeof loan.startDate === 'string') {
+                        try {
+                            // Parse date in local time to avoid timezone shifts
+                            const parts = loan.startDate.split('-');
+                            if (parts.length === 3) {
+                                const [year, month, day] = parts.map(Number);
+                                if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+                                    setStartDate(new Date(year, month - 1, day));
+                                }
+                            }
+                        } catch (dateError) {
+                            console.error('Error parsing date:', dateError);
+                        }
                     }
-                    setLoanAmount(loan.amount.toString());
+                    if (loan.amount != null) {
+                        setLoanAmount(loan.amount.toString());
+                    }
                     // Calculate term in months
                     const termValue = parseFloat(loan.term);
-                    const termInMonths = loan.termUnit === 'years' ? termValue * 12 : termValue;
-                    setLoanTermInMonths(termInMonths);
+                    if (!isNaN(termValue)) {
+                        const termInMonths = loan.termUnit === 'years' ? termValue * 12 : termValue;
+                        setLoanTermInMonths(termInMonths);
+                    }
                 }
             }
         } catch (error) {
@@ -80,7 +97,11 @@ export default function PaymentsScreen() {
             const loansData = await AsyncStorage.getItem('loans');
             if (loansData) {
                 const loans = JSON.parse(loansData);
-                const loan = loans.find((l: any) => l.id === id);
+                if (!Array.isArray(loans)) {
+                    console.error('Invalid loans data');
+                    return;
+                }
+                const loan = loans.find((l: any) => l?.id === id);
                 if (loan) {
                     const loadedEarlyPayments = loan.earlyPayments || [];
                     const loadedRateAdjustments = loan.rateAdjustments || [];

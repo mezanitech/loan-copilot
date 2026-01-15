@@ -61,6 +61,11 @@ export default function DashboardScreen() {
             const storedLoans = await AsyncStorage.getItem('loans');
             if (storedLoans) {
                 const loadedLoans = JSON.parse(storedLoans);
+                if (!Array.isArray(loadedLoans)) {
+                    console.error('Invalid loans data format');
+                    setLoans([]);
+                    return;
+                }
                 setLoans(loadedLoans);
                 
                 // Track achievement: max active loans
@@ -73,6 +78,7 @@ export default function DashboardScreen() {
             }
         } catch (error) {
             console.error('Failed to load loans:', error);
+            setLoans([]); // Set empty array on error
         }
     };
 
@@ -95,6 +101,10 @@ export default function DashboardScreen() {
             if (!storedLoans) return;
             
             const loansData = JSON.parse(storedLoans);
+            if (!Array.isArray(loansData)) {
+                console.error('Invalid loans data format');
+                return;
+            }
             const notificationPrefs = await getNotificationPreferences();
             
             // Check and schedule next payments for all loans
@@ -279,56 +289,86 @@ export default function DashboardScreen() {
             return loan.interestRate;
         }
 
-        // Calculate months elapsed since loan start
-        // Parse date in local time to avoid timezone shifts
-        const [year, month, day] = loan.startDate.split('-').map(Number);
-        const startDate = new Date(year, month - 1, day);
-        const currentDate = new Date();
-        const monthsElapsed = Math.max(0,
-            (currentDate.getFullYear() - startDate.getFullYear()) * 12 +
-            (currentDate.getMonth() - startDate.getMonth())
-        ) + 1; // +1 because first payment is month 1
+        try {
+            // Calculate months elapsed since loan start
+            // Parse date in local time to avoid timezone shifts
+            if (!loan.startDate || typeof loan.startDate !== 'string') {
+                return loan.interestRate;
+            }
+            const parts = loan.startDate.split('-');
+            if (parts.length !== 3) {
+                return loan.interestRate;
+            }
+            const [year, month, day] = parts.map(Number);
+            if (isNaN(year) || isNaN(month) || isNaN(day)) {
+                return loan.interestRate;
+            }
+            const startDate = new Date(year, month - 1, day);
+            const currentDate = new Date();
+            const monthsElapsed = Math.max(0,
+                (currentDate.getFullYear() - startDate.getFullYear()) * 12 +
+                (currentDate.getMonth() - startDate.getMonth())
+            ) + 1; // +1 because first payment is month 1
 
-        // Find the most recent rate adjustment that has occurred
-        let currentRate = loan.interestRate;
-        for (const adjustment of loan.rateAdjustments) {
-            const adjustmentMonth = parseInt(adjustment.month);
-            if (!isNaN(adjustmentMonth) && adjustmentMonth <= monthsElapsed) {
-                const newRate = parseFloat(adjustment.newRate);
-                if (!isNaN(newRate)) {
-                    currentRate = newRate;
+            // Find the most recent rate adjustment that has occurred
+            let currentRate = loan.interestRate;
+            for (const adjustment of loan.rateAdjustments) {
+                const adjustmentMonth = parseInt(adjustment.month);
+                if (!isNaN(adjustmentMonth) && adjustmentMonth <= monthsElapsed) {
+                    const newRate = parseFloat(adjustment.newRate);
+                    if (!isNaN(newRate)) {
+                        currentRate = newRate;
+                    }
                 }
             }
-        }
 
-        return currentRate;
+            return currentRate;
+        } catch (error) {
+            console.error('Error calculating current rate:', error);
+            return loan.interestRate;
+        }
     };
     
     // Calculate remaining principal for all loans
     const calculateRemainingPrincipal = (loan: Loan): number => {
-        // Parse date in local time to avoid timezone shifts
-        const [year, month, day] = loan.startDate.split('-').map(Number);
-        const startDate = new Date(year, month - 1, day);
-        const currentDate = new Date();
-        const monthsPassed = Math.max(0, 
-            (currentDate.getFullYear() - startDate.getFullYear()) * 12 + 
-            (currentDate.getMonth() - startDate.getMonth())
-        );
-        
-        const termInMonths = loan.termUnit === 'years' ? loan.term * 12 : loan.term;
-        const paymentsMade = Math.min(monthsPassed, termInMonths);
-        
-        if (paymentsMade >= termInMonths || loan.interestRate === 0) {
-            return Math.max(0, loan.amount - (loan.monthlyPayment * paymentsMade));
+        try {
+            // Parse date in local time to avoid timezone shifts
+            if (!loan.startDate || typeof loan.startDate !== 'string') {
+                return loan.amount;
+            }
+            const parts = loan.startDate.split('-');
+            if (parts.length !== 3) {
+                return loan.amount;
+            }
+            const [year, month, day] = parts.map(Number);
+            if (isNaN(year) || isNaN(month) || isNaN(day)) {
+                return loan.amount;
+            }
+            const startDate = new Date(year, month - 1, day);
+            const currentDate = new Date();
+            const monthsPassed = Math.max(0, 
+                (currentDate.getFullYear() - startDate.getFullYear()) * 12 + 
+                (currentDate.getMonth() - startDate.getMonth())
+            );
+            
+            const termInMonths = loan.termUnit === 'years' ? loan.term * 12 : loan.term;
+            const paymentsMade = Math.min(monthsPassed, termInMonths);
+            
+            if (paymentsMade >= termInMonths || loan.interestRate === 0) {
+                return Math.max(0, loan.amount - (loan.monthlyPayment * paymentsMade));
+            }
+            
+            const monthlyRate = loan.interestRate / 100 / 12;
+            const totalPayments = termInMonths;
+            const remaining = loan.amount * 
+                (Math.pow(1 + monthlyRate, totalPayments) - Math.pow(1 + monthlyRate, paymentsMade)) /
+                (Math.pow(1 + monthlyRate, totalPayments) - 1);
+            
+            return Math.max(0, remaining);
+        } catch (error) {
+            console.error('Error calculating remaining principal:', error);
+            return loan.amount;
         }
-        
-        const monthlyRate = loan.interestRate / 100 / 12;
-        const totalPayments = termInMonths;
-        const remaining = loan.amount * 
-            (Math.pow(1 + monthlyRate, totalPayments) - Math.pow(1 + monthlyRate, paymentsMade)) /
-            (Math.pow(1 + monthlyRate, totalPayments) - 1);
-        
-        return Math.max(0, remaining);
     };
     
     const totalRemaining = loans.reduce((sum, loan) => sum + (loan.remainingBalance ?? calculateRemainingPrincipal(loan)), 0);

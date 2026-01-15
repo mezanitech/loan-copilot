@@ -12,6 +12,9 @@ module.exports = {
       }
     }]
   },
+  transformIgnorePatterns: [
+    'node_modules/(?!(expo-store-review|expo-constants|expo-modules-core)/)',
+  ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
