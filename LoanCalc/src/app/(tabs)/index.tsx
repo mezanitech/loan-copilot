@@ -1,6 +1,7 @@
 import { Link, useFocusEffect, useRouter } from "expo-router";
 import { useState, useCallback, useMemo } from "react";
 import { Text, View, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, Image, Platform, ActivityIndicator } from "react-native";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -46,6 +47,8 @@ type Loan = {
 };
 
 export default function DashboardScreen() {
+    const insets = useSafeAreaInsets();
+    
     // State to store all loans
     const [loans, setLoans] = useState<Loan[]>([]);
     const [expandedLoans, setExpandedLoans] = useState<Set<string>>(new Set());
@@ -417,7 +420,10 @@ export default function DashboardScreen() {
 
     return (
         <View style={styles.wrapper}>
-            <ScrollView style={styles.container}>
+            <ScrollView 
+                style={styles.container}
+                contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 80 }}
+            >
         {/* Page header */}
         <View style={styles.header}>
             <View>
@@ -626,7 +632,7 @@ export default function DashboardScreen() {
         </ScrollView>
         
         {/* Fixed button at bottom */}
-        <View style={styles.bottomButtonContainer}>
+        <View style={[styles.bottomButtonContainer, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]}>
             <Link href="/(tabs)/createLoan" asChild>
                 <TouchableOpacity style={styles.addButton} activeOpacity={0.8}>
                     <Text style={styles.addButtonText}>+ Create New Loan</Text>
@@ -762,7 +768,9 @@ const styles = StyleSheet.create({
     // Main container with padding
     container: {
         flex: 1,
-        padding: theme.spacing.xl,
+        paddingTop: theme.spacing.xl,
+        paddingHorizontal: Platform.OS === 'android' ? 0 : theme.spacing.xl,
+        paddingBottom: 0,
     },
     // Page header
     header: {
@@ -770,6 +778,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'flex-start',
         marginBottom: theme.spacing.xxl,
+        paddingHorizontal: Platform.OS === 'android' ? theme.spacing.md : 0,
     },
     settingsButton: {
         backgroundColor: theme.colors.surfaceGlass,
@@ -801,15 +810,16 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         gap: theme.spacing.md,
         marginBottom: theme.spacing.xl,
+        paddingHorizontal: Platform.OS === 'android' ? theme.spacing.md : 0,
     },
     summaryCard: {
         flex: 1,
-        backgroundColor: theme.colors.surfaceGlass,
+        backgroundColor: Platform.OS === 'android' ? 'transparent' : theme.colors.surfaceGlass,
         padding: theme.spacing.md,
         borderRadius: theme.borderRadius.lg,
-        borderWidth: 1,
+        borderWidth: Platform.OS === 'android' ? 0 : 1,
         borderColor: theme.colors.glassBorder,
-        ...theme.shadows.glass,
+        ...Platform.OS === 'android' ? {} : theme.shadows.glass,
     },
     summaryLabel: {
         fontSize: theme.fontSize.xs,
@@ -854,6 +864,7 @@ const styles = StyleSheet.create({
         borderRadius: theme.borderRadius.lg,
         alignItems: "center",
         marginBottom: theme.spacing.lg,
+        marginHorizontal: Platform.OS === 'android' ? theme.spacing.md : 0,
     },
     extraPaymentButtonText: {
         color: theme.colors.textInverse,
@@ -947,15 +958,16 @@ const styles = StyleSheet.create({
     loansContainer: {
         gap: theme.spacing.md,
         paddingBottom: theme.spacing.xl,
+        paddingHorizontal: Platform.OS === 'android' ? theme.spacing.md : 0,
     },
     // Individual loan card styling
     loanCard: {
-        backgroundColor: theme.colors.surfaceGlass,
+        backgroundColor: Platform.OS === 'android' ? 'transparent' : theme.colors.surfaceGlass,
         borderRadius: theme.borderRadius.lg,
         padding: theme.spacing.xl,
-        borderWidth: 1,
+        borderWidth: Platform.OS === 'android' ? 0 : 1,
         borderColor: theme.colors.glassBorder,
-        ...theme.shadows.glass,
+        ...Platform.OS === 'android' ? {} : theme.shadows.glass,
     },
     // Header section of loan card (amount and delete button)
     loanHeader: {
