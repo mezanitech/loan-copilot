@@ -29,7 +29,7 @@ export default function CurrencySettingsScreen() {
     };
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { paddingTop: insets.top }]}>
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity
@@ -93,7 +93,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: theme.spacing.md,
-        paddingTop: Platform.OS === 'ios' ? 50 : theme.spacing.lg,
         paddingBottom: theme.spacing.lg,
         backgroundColor: theme.colors.background,
         borderBottomWidth: 1,
