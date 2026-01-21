@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Text, View, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, router } from 'expo-router';
 import { theme } from '../../constants/theme';
@@ -33,6 +34,7 @@ type EarlyPayment = {
 };
 
 export default function AddExtraPaymentScreen() {
+    const insets = useSafeAreaInsets();
     const [loans, setLoans] = useState<Loan[]>([]);
     const [currency, setCurrency] = useState<Currency>({ code: 'USD', symbol: '$', name: 'US Dollar', position: 'before' });
 
@@ -140,7 +142,11 @@ export default function AddExtraPaymentScreen() {
     };
 
     return (
-        <ScrollView style={styles.container}>
+        <ScrollView 
+            style={styles.container}
+            contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 80 }}
+        >
+        >
             <Text style={styles.title}>Manage Extra Payments</Text>
             <Text style={styles.subtitle}>
                 Select a loan to add extra payments and see their impact on your payoff timeline

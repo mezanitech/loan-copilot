@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +20,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { updateProgress } from '../../utils/achievementUtils';
 
 export default function NotificationSettingsScreen() {
+    const insets = useSafeAreaInsets();
     const [enabled, setEnabled] = useState(false);
     const [reminderDays, setReminderDays] = useState(3);
     const [permissionGranted, setPermissionGranted] = useState(false);
@@ -159,7 +161,11 @@ export default function NotificationSettingsScreen() {
                 <Text style={styles.headerTitle}>Notifications</Text>
             </View>
 
-            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+            <ScrollView 
+                style={styles.content} 
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 80 }}
+            >
                 {/* Simulator Warning */}
                 {!Device.isDevice && (
                     <View style={styles.warningCard}>

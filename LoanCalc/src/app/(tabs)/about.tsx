@@ -1,4 +1,5 @@
 import { Text, View, StyleSheet, ScrollView, Platform, TouchableOpacity, Linking, Alert } from "react-native";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../../constants/theme';
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -9,6 +10,7 @@ import { openAppStore } from '../../utils/ratingUtils';
 import type { AchievementProgress, AchievementCategory } from '../../utils/achievementUtils';
 
 export default function AboutScreen() {
+    const insets = useSafeAreaInsets();
     const router = useRouter();
     const [showAchievements, setShowAchievements] = useState(false);
     const [completionPercentage, setCompletionPercentage] = useState(0);
@@ -53,7 +55,11 @@ export default function AboutScreen() {
     };
 
     return (
-        <ScrollView style={styles.container}>
+        <ScrollView 
+            style={styles.container}
+            contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 80 }}
+        >
+        >
             <Text style={styles.title}>About Loan Copilot</Text>
             
             {/* Achievements Section */}

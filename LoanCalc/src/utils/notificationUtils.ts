@@ -1,14 +1,32 @@
-import * as Notifications from 'expo-notifications';
-import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import { formatDateForStorage, parseDateFromStorage } from './dateUtils';
 import { getCurrencyPreference } from './storage';
 import { formatCurrency } from './currencyUtils';
 
+// Notifications are not supported in Expo Go (SDK 53+)
+// They work in production builds and development builds
+let Notifications: any;
+let Device: any;
+
+// Don't even try to load notifications in Expo Go - it will fail
+// In production builds, this will work fine
+try {
+    const ExpoNotifications = require('expo-notifications');
+    const ExpoDevice = require('expo-device');
+    Notifications = ExpoNotifications;
+    Device = ExpoDevice;
+} catch (e) {
+    // Silently fail in Expo Go
+    Notifications = null;
+    Device = null;
+}
+
 /**
  * Configure notification behavior
  */
 export function setupNotificationHandler() {
+    if (!Notifications) return;
+    
     Notifications.setNotificationHandler({
         handleNotification: async () => ({
             shouldShowAlert: true,
@@ -24,6 +42,11 @@ export function setupNotificationHandler() {
  * Request notification permissions
  */
 export async function requestNotificationPermissions(): Promise<boolean> {
+    if (!Notifications || !Device) {
+        console.log('Notifications not available in this environment');
+        return false;
+    }
+    
     // Notifications don't work on simulator
     if (!Device.isDevice) {
         console.log('Notifications are not supported on simulator');
@@ -60,6 +83,10 @@ export async function requestNotificationPermissions(): Promise<boolean> {
  * Check if notifications are enabled (permissions granted)
  */
 export async function areNotificationsEnabled(): Promise<boolean> {
+    if (!Notifications || !Device) {
+        return false;
+    }
+    
     if (!Device.isDevice) {
         return false;
     }
@@ -79,6 +106,10 @@ export async function scheduleNextPaymentReminder(
     startDate: string,
     reminderDaysBefore: number
 ): Promise<string[]> {
+    if (!Notifications) {
+        return [];
+    }
+    
     if (!paymentSchedule || paymentSchedule.length === 0) {
         return [];
     }
@@ -163,6 +194,10 @@ export async function schedulePaymentReminders(
  * Cancel all notifications for a loan
  */
 export async function cancelLoanNotifications(notificationIds: string[]): Promise<void> {
+    if (!Notifications) {
+        return;
+    }
+    
     if (!notificationIds || notificationIds.length === 0) {
         return;
     }
@@ -186,6 +221,10 @@ export async function cancelLoanNotifications(notificationIds: string[]): Promis
  * Cancel all notifications
  */
 export async function cancelAllNotifications(): Promise<void> {
+    if (!Notifications) {
+        return;
+    }
+    
     try {
         await Notifications.cancelAllScheduledNotificationsAsync();
     } catch (error) {
@@ -196,7 +235,11 @@ export async function cancelAllNotifications(): Promise<void> {
 /**
  * Get all scheduled notifications (for debugging)
  */
-export async function getAllScheduledNotifications(): Promise<Notifications.NotificationRequest[]> {
+export async function getAllScheduledNotifications(): Promise<any[]> {
+    if (!Notifications) {
+        return [];
+    }
+    
     try {
         return await Notifications.getAllScheduledNotificationsAsync();
     } catch (error) {
@@ -209,6 +252,11 @@ export async function getAllScheduledNotifications(): Promise<Notifications.Noti
  * Send a test notification immediately
  */
 export async function sendTestNotification(): Promise<void> {
+    if (!Notifications) {
+        console.log('Notifications not available');
+        return;
+    }
+    
     try {
         await Notifications.scheduleNotificationAsync({
             content: {
@@ -233,6 +281,10 @@ export async function checkAndScheduleNextPayments(
     notificationPrefs: { enabled: boolean; reminderDays: number },
     generatePaymentSchedule: (params: any) => any[]
 ): Promise<void> {
+    if (!Notifications) {
+        return;
+    }
+    
     // First, cancel ALL scheduled notifications to clean up any old ones
     try {
         await cancelAllNotifications();

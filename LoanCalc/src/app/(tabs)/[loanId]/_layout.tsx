@@ -1,9 +1,12 @@
 import { Tabs, router } from "expo-router";
 import { TouchableOpacity, Text, Platform, View } from "react-native";
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from "../../../constants/theme";
 
 export default function LoanTabLayout() {
+    const insets = useSafeAreaInsets();
+    
     return (
         <Tabs
             screenOptions={{
@@ -11,9 +14,9 @@ export default function LoanTabLayout() {
                     backgroundColor: theme.colors.background,
                     borderTopWidth: 2,
                     borderTopColor: theme.colors.primary,
-                    paddingBottom: Platform.OS === 'ios' ? 20 : 8,
+                    paddingBottom: Math.max(insets.bottom, 8) + 4,
                     paddingTop: 12,
-                    height: Platform.OS === 'ios' ? 90 : 65,
+                    height: Math.max(insets.bottom, 8) + 65,
                     elevation: 8,
                     shadowColor: theme.colors.primary,
                     shadowOffset: { width: 0, height: -4 },

@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { Text, View, StyleSheet, ScrollView, TouchableOpacity, Platform } from "react-native";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { theme } from '../../constants/theme';
 import { getCurrencyPreference, saveCurrencyPreference, CURRENCIES, Currency } from '../../utils/storage';
 import { updateProgress } from '../../utils/achievementUtils';
 
 export default function CurrencySettingsScreen() {
+    const insets = useSafeAreaInsets();
     const [selectedCurrency, setSelectedCurrency] = useState<Currency>(CURRENCIES[0]);
 
     // Load currency preference on mount
@@ -40,7 +42,10 @@ export default function CurrencySettingsScreen() {
                 <View style={styles.headerSpacer} />
             </View>
 
-            <ScrollView style={styles.content}>
+            <ScrollView 
+                style={styles.content}
+                contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 80 }}
+            >
                 <Text style={styles.description}>
                     Select your preferred currency. This will be used to display all loan amounts throughout the app.
                 </Text>

@@ -1085,13 +1085,13 @@ const styles = StyleSheet.create({
     // Export Report button (top)
     exportButtonTop: {
         flex: 1,
-        backgroundColor: theme.colors.surfaceGlass,
+        backgroundColor: Platform.OS === 'android' ? 'transparent' : theme.colors.surfaceGlass,
         padding: theme.spacing.md,
         borderRadius: theme.borderRadius.lg,
         alignItems: "center",
-        borderWidth: 1,
+        borderWidth: Platform.OS === 'android' ? 0 : 1,
         borderColor: theme.colors.glassBorderBlue,
-        ...theme.shadows.glass,
+        ...Platform.OS === 'android' ? {} : theme.shadows.glass,
     },
     exportButtonTopText: {
         color: theme.colors.primary,
@@ -1101,13 +1101,13 @@ const styles = StyleSheet.create({
     // Duplicate button (top)
     duplicateButtonTop: {
         flex: 1,
-        backgroundColor: theme.colors.surfaceGlass,
+        backgroundColor: Platform.OS === 'android' ? 'transparent' : theme.colors.surfaceGlass,
         padding: theme.spacing.md,
         borderRadius: theme.borderRadius.lg,
         alignItems: "center",
-        borderWidth: 1,
+        borderWidth: Platform.OS === 'android' ? 0 : 1,
         borderColor: 'rgba(34, 197, 94, 0.3)', // Success color border
-        ...theme.shadows.glass,
+        ...Platform.OS === 'android' ? {} : theme.shadows.glass,
     },
     duplicateButtonTopText: {
         color: theme.colors.success,
@@ -1181,13 +1181,13 @@ const styles = StyleSheet.create({
     savingsContainer: {
         marginTop: theme.spacing.xl,
         padding: theme.spacing.xl,
-        backgroundColor: theme.colors.surfaceGlass,
+        backgroundColor: Platform.OS === 'android' ? 'transparent' : theme.colors.surfaceGlass,
         borderRadius: theme.borderRadius.lg,
-        borderWidth: 1,
+        borderWidth: Platform.OS === 'android' ? 0 : 1,
         borderColor: theme.colors.glassBorder,
         borderLeftWidth: 4,
         borderLeftColor: theme.colors.success,
-        ...theme.shadows.glass,
+        ...Platform.OS === 'android' ? {} : theme.shadows.glass,
     },
     // Row for each savings metric
     savingsRow: {
@@ -1216,8 +1216,8 @@ const styles = StyleSheet.create({
         color: theme.colors.textPrimary,
     },
     dateButton: {
-        backgroundColor: theme.colors.surfaceGlass,
-        borderWidth: 1,
+        backgroundColor: Platform.OS === 'android' ? 'transparent' : theme.colors.surfaceGlass,
+        borderWidth: Platform.OS === 'android' ? 0 : 1,
         borderColor: theme.colors.glassBorder,
         borderRadius: theme.borderRadius.md,
         padding: theme.spacing.md,
@@ -1234,13 +1234,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     datePickerContainer: {
-        backgroundColor: theme.colors.surfaceGlass,
+        backgroundColor: Platform.OS === 'android' ? 'transparent' : theme.colors.surfaceGlass,
         borderRadius: theme.borderRadius.lg,
-        borderWidth: 1,
+        borderWidth: Platform.OS === 'android' ? 0 : 1,
         borderColor: theme.colors.glassBorder,
         padding: theme.spacing.xl,
         margin: theme.spacing.xl,
-        ...theme.shadows.glass,
+        ...Platform.OS === 'android' ? {} : theme.shadows.glass,
     },
     closeButton: {
         backgroundColor: theme.colors.primary,
@@ -1306,18 +1306,18 @@ const styles = StyleSheet.create({
         fontWeight: theme.fontWeight.semibold,
     },
     exportButton: {
-        backgroundColor: 'rgba(96, 165, 250, 0.1)',
+        backgroundColor: Platform.OS === 'android' ? 'transparent' : 'rgba(96, 165, 250, 0.1)',
         paddingHorizontal: theme.spacing.md,
         paddingVertical: theme.spacing.sm,
         borderRadius: theme.borderRadius.lg,
         alignItems: "center",
-        borderWidth: 2,
+        borderWidth: Platform.OS === 'android' ? 0 : 2,
         borderColor: 'rgba(96, 165, 250, 0.3)',
         shadowColor: '#60A5FA',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
+        shadowOpacity: Platform.OS === 'android' ? 0 : 0.15,
         shadowRadius: 8,
-        elevation: 3,
+        elevation: Platform.OS === 'android' ? 0 : 3,
         alignSelf: 'flex-end',
         marginBottom: theme.spacing.lg,
     },
@@ -1330,13 +1330,13 @@ const styles = StyleSheet.create({
     rateAdjustmentContainer: {
         marginTop: theme.spacing.xl,
         padding: theme.spacing.xl,
-        backgroundColor: theme.colors.surfaceGlass,
+        backgroundColor: Platform.OS === 'android' ? 'transparent' : theme.colors.surfaceGlass,
         borderRadius: theme.borderRadius.lg,
-        borderWidth: 1,
+        borderWidth: Platform.OS === 'android' ? 0 : 1,
         borderColor: theme.colors.glassBorder,
         borderLeftWidth: 4,
         borderLeftColor: theme.colors.warning,
-        ...theme.shadows.glass,
+        ...Platform.OS === 'android' ? {} : theme.shadows.glass,
     },
     rateInfoNote: {
         backgroundColor: 'rgba(255, 193, 7, 0.1)',
@@ -1401,13 +1401,13 @@ const styles = StyleSheet.create({
     },
     // Details card styles
     detailsCard: {
-        backgroundColor: theme.colors.surfaceGlass,
+        backgroundColor: Platform.OS === 'android' ? 'transparent' : theme.colors.surfaceGlass,
         borderRadius: theme.borderRadius.lg,
-        borderWidth: 1,
+        borderWidth: Platform.OS === 'android' ? 0 : 1,
         borderColor: theme.colors.glassBorder,
         padding: theme.spacing.lg,
         marginBottom: theme.spacing.xl,
-        ...theme.shadows.glass,
+        ...Platform.OS === 'android' ? {} : theme.shadows.glass,
     },
     detailsHeader: {
         flexDirection: 'row',
@@ -1453,8 +1453,8 @@ const styles = StyleSheet.create({
     // Modal footer button styles (used by EditModal)
     modalCancelButton: {
         flex: 1,
-        backgroundColor: theme.colors.surfaceGlass,
-        borderWidth: 1,
+        backgroundColor: Platform.OS === 'android' ? 'transparent' : theme.colors.surfaceGlass,
+        borderWidth: Platform.OS === 'android' ? 0 : 1,
         borderColor: theme.colors.glassBorder,
         padding: theme.spacing.md,
         borderRadius: theme.borderRadius.md,

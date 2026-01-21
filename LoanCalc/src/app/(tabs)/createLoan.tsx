@@ -1,6 +1,7 @@
 // Import React hooks and React Native components
 import { useState, useRef, useCallback } from "react";
 import { Text, View, StyleSheet, TouchableOpacity, TouchableWithoutFeedback, Keyboard, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
 import { theme } from '../../constants/theme';
@@ -23,6 +24,8 @@ import { incrementProgress } from "../../utils/achievementUtils";
 
 
 export default function CreateLoanScreen() {
+    const insets = useSafeAreaInsets();
+    
     // Form input states
     const [loanName, setLoanName] = useState("");
     const [loanAmount, setLoanAmount] = useState("");
@@ -300,7 +303,10 @@ export default function CreateLoanScreen() {
     >
         <AutoSaveIndicator ref={autoSaveRef} onSave={saveLoan} />
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <ScrollView style={styles.container}>
+            <ScrollView 
+                style={styles.container}
+                contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 80 }}
+            >
         {/* Page title */}
         <Text style={styles.title}>
             Calculate your loan payments
