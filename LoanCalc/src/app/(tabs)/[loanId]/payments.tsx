@@ -29,6 +29,15 @@ export default function PaymentsScreen() {
         if (loanId) {
             loadLoan(loanId);
         }
+        
+        // Cleanup function to reset state when loanId changes
+        return () => {
+            // Clear state when switching to different loan
+            setEarlyPayments([]);
+            setRateAdjustments([]);
+            earlyPaymentsRef.current = [];
+            rateAdjustmentsRef.current = [];
+        };
     }, [loanId]);
 
     // Reload loan data when navigating to this page (e.g., after changing start date in overview)

@@ -141,7 +141,7 @@ export default function LoanOverviewScreen() {
                     autoSaveRef.current.forceSave();
                 }
             };
-        }, [loanName, loanAmount, interestRate, term, termUnit, date])
+        }, [loanId, loanName, loanAmount, interestRate, term, termUnit, date])
     );
 
     const loadCurrency = async () => {
@@ -156,10 +156,18 @@ export default function LoanOverviewScreen() {
             const loansData = await AsyncStorage.getItem('loans');
             if (loansData) {
                 const loans = JSON.parse(loansData);
-                const loan = loans.find((l: any) => l.id === loanId);
+                if (!Array.isArray(loans)) {
+                    console.error('Invalid loans data');
+                    return;
+                }
+                const loan = loans.find((l: any) => l?.id === loanId);
                 if (loan) {
                     setEarlyPayments(loan.earlyPayments || []);
                     setRateAdjustments(loan.rateAdjustments || []);
+                } else {
+                    // Loan not found - clear adjustments
+                    setEarlyPayments([]);
+                    setRateAdjustments([]);
                 }
             }
         } catch (error) {
