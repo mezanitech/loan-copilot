@@ -1,4 +1,5 @@
 [build]
+  base = "LoanCalc"
   publish = "dist"
   command = "npm run export:web"
 
