@@ -781,7 +781,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: Platform.OS === 'android' ? theme.spacing.md : 0,
     },
     settingsButton: {
-        backgroundColor: Platform.OS === 'android' ? 'transparent' : theme.colors.surfaceGlass,
+        backgroundColor: Platform.OS === 'android' ? theme.colors.gray100 : theme.colors.surfaceGlass,
         width: 40,
         height: 40,
         borderRadius: 20,
