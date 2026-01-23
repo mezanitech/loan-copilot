@@ -1,12 +1,16 @@
 // WEB-SPECIFIC VERSION - Loan Comparison Dashboard
 import { Link, useFocusEffect, useRouter } from "expo-router";
 import { useState, useCallback } from "react";
-import { Text, View, StyleSheet, ScrollView, TouchableOpacity, Alert } from "react-native";
+import { Text, View, StyleSheet, ScrollView, TouchableOpacity, Alert, Animated } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { theme } from '../../constants/theme';
 import { cancelLoanNotifications } from '../../utils/notificationUtils';
 import { getCurrencyPreference, Currency } from '../../utils/storage';
 import { formatCurrency } from '../../utils/currencyUtils';
+import EmptyState from '../../components/EmptyState';
+import { DashboardSkeleton } from '../../components/LoadingSkeleton';
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
+import { ThemeProvider, useTheme } from '../../contexts/ThemeContext';
 
 type Loan = {
     id: string;
@@ -24,16 +28,22 @@ type Loan = {
 
 type ViewMode = 'comparison' | 'grid' | 'list';
 
-export default function ComparisonDashboard() {
+function ComparisonDashboardContent() {
     const [loans, setLoans] = useState<Loan[]>([]);
     const [selectedLoans, setSelectedLoans] = useState<Set<string>>(new Set());
     const [currency, setCurrency] = useState<Currency>({ code: 'USD', symbol: '$', name: 'US Dollar', position: 'before' });
     const [viewMode, setViewMode] = useState<ViewMode>('comparison');
     const [showInsights, setShowInsights] = useState(true);
+    const [isLoading, setIsLoading] = useState(true);
     const router = useRouter();
+    const { mode, toggleTheme, colors } = useTheme();
+    
+    // Enable keyboard shortcuts
+    useKeyboardShortcuts();
 
     const loadLoans = async () => {
         try {
+            setIsLoading(true);
             const storedLoans = await AsyncStorage.getItem('loans');
             if (storedLoans) {
                 const parsedLoans = JSON.parse(storedLoans);
@@ -42,6 +52,8 @@ export default function ComparisonDashboard() {
             }
         } catch (error) {
             console.error('Failed to load loans:', error);
+        } finally {
+            setTimeout(() => setIsLoading(false), 300); // Small delay for smooth transition
         }
     };
 
@@ -112,11 +124,14 @@ export default function ComparisonDashboard() {
     };
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
             {/* Left Sidebar */}
-            <View style={styles.sidebar}>
+            <View style={[styles.sidebar, { backgroundColor: colors.sidebar }]}>
                 <View style={styles.sidebarHeader}>
-                    <Text style={styles.appTitle}>💰 Loan Co-Pilot</Text>
+                    <Text style={[styles.appTitle, { color: colors.sidebarTextActive }]}>💰 Loan Co-Pilot</Text>
+                    <TouchableOpacity onPress={toggleTheme} style={styles.themeToggle}>
+                        <Text style={styles.themeToggleIcon}>{mode === 'light' ? '🌙' : '☀️'}</Text>
+                    </TouchableOpacity>
                 </View>
 
                 <View style={styles.sidebarSection}>
@@ -172,23 +187,18 @@ export default function ComparisonDashboard() {
             </View>
 
             {/* Main Content */}
-            <ScrollView style={styles.mainContent}>
-                {loans.length === 0 && (
-                    <View style={styles.emptyState}>
-                        <Text style={styles.emptyIcon}>📊</Text>
-                        <Text style={styles.emptyTitle}>No Loans Yet</Text>
-                        <Text style={styles.emptyText}>
-                            Create your first loan to start comparing and optimizing your debt payoff strategy.
-                        </Text>
-                        <Link href="/createLoan" asChild>
-                            <TouchableOpacity style={styles.emptyButton}>
-                                <Text style={styles.emptyButtonText}>Create Your First Loan</Text>
-                            </TouchableOpacity>
-                        </Link>
-                    </View>
-                )}
-
-                {loans.length > 0 && (
+            <ScrollView style={[styles.mainContent, { backgroundColor: colors.backgroundSecondary }]}>
+                {isLoading ? (
+                    <DashboardSkeleton />
+                ) : loans.length === 0 ? (
+                    <EmptyState
+                        icon="📊"
+                        title="No Loans Yet"
+                        description="Create your first loan to start comparing and optimizing your debt payoff strategy. Track multiple loans, compare interest rates, and visualize your path to being debt-free."
+                        actionText="Create Your First Loan"
+                        actionLink="/createLoan"
+                    />
+                ) : (
                     <>
                         {/* Top Stats Bar */}
                         <View style={styles.statsBar}>
@@ -857,4 +867,23 @@ const styles = StyleSheet.create({
         backgroundColor: '#e5e7eb',
         marginVertical: 10,
     },
+    themeToggle: {
+        padding: 8,
+        borderRadius: 8,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    themeToggleIcon: {
+        fontSize: 20,
+    },
+    fadeIn: {
+        opacity: 1,
+    },
 });
+
+export default function ComparisonDashboard() {
+    return (
+        <ThemeProvider>
+            <ComparisonDashboardContent />
+        </ThemeProvider>
+    );
+}

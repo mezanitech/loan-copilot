@@ -1,6 +1,6 @@
 // WEB-SPECIFIC VERSION - Create Loan Page
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Text, View, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from "react-native";
+import { Text, View, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Animated } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect, Link } from 'expo-router';
 import { theme } from '../../constants/theme';
@@ -15,8 +15,10 @@ import { scheduleNextPaymentReminder } from "../../utils/notificationUtils";
 import { getNotificationPreferences } from "../../utils/storage";
 import { formatCurrency } from "../../utils/currencyUtils";
 import { incrementProgress } from "../../utils/achievementUtils";
+import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts";
+import { ThemeProvider, useTheme } from "../../contexts/ThemeContext";
 
-export default function CreateLoanScreenWeb() {
+function CreateLoanScreenWebContent() {
     const [loanName, setLoanName] = useState("");
     const [loanAmount, setLoanAmount] = useState("");
     const [interestRate, setInterestRate] = useState("");
@@ -31,6 +33,20 @@ export default function CreateLoanScreenWeb() {
     const [activeStep, setActiveStep] = useState(1);
     const [showInsights, setShowInsights] = useState(true);
     const [windowWidth, setWindowWidth] = useState(Dimensions.get('window').width);
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const { mode, toggleTheme, colors } = useTheme();
+    
+    // Enable keyboard shortcuts
+    useKeyboardShortcuts();
+
+    // Fade in animation on mount
+    useEffect(() => {
+        Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 400,
+            useNativeDriver: true,
+        }).start();
+    }, []);
 
     // Handle window resize for responsive behavior
     useEffect(() => {
@@ -274,12 +290,15 @@ export default function CreateLoanScreenWeb() {
     };
 
     return (
-        <View style={styles.container}>
+        <Animated.View style={[styles.container, { backgroundColor: colors.background, opacity: fadeAnim }]}>
             {/* Left Sidebar - Hide on mobile */}
             {windowWidth >= 768 && (
-                <View style={styles.sidebar}>
+                <View style={[styles.sidebar, { backgroundColor: colors.sidebar }]}>
                     <View style={styles.sidebarHeader}>
-                        <Text style={styles.appTitle}>💰 Loan Co-Pilot</Text>
+                        <Text style={[styles.appTitle, { color: colors.sidebarTextActive }]}>💰 Loan Co-Pilot</Text>
+                        <TouchableOpacity onPress={toggleTheme} style={styles.themeToggle}>
+                            <Text style={styles.themeToggleIcon}>{mode === 'light' ? '🌙' : '☀️'}</Text>
+                        </TouchableOpacity>
                     </View>
 
                     <View style={styles.sidebarSection}>
@@ -547,7 +566,7 @@ export default function CreateLoanScreenWeb() {
                     </View>
                 </View>
             )}
-        </View>
+        </Animated.View>
     );
 }
 
@@ -884,4 +903,20 @@ const styles = StyleSheet.create({
         lineHeight: 16,
         color: theme.colors.textSecondary,
     },
+    themeToggle: {
+        padding: 8,
+        borderRadius: 8,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    themeToggleIcon: {
+        fontSize: 20,
+    },
 });
+
+export default function CreateLoanScreenWeb() {
+    return (
+        <ThemeProvider>
+            <CreateLoanScreenWebContent />
+        </ThemeProvider>
+    );
+}
