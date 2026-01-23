@@ -39,7 +39,18 @@
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro",
-      "output": "static"
+      "output": "static",
+      "name": "Loan Co-Pilot",
+      "shortName": "LoanCoPilot",
+      "description": "Your copilot for managing loans. Track payments, visualize progress, and navigate your path to financial freedom.",
+      "themeColor": "#7C3AED",
+      "backgroundColor": "#ffffff",
+      "orientation": "portrait",
+      "lang": "en",
+      "scope": "/",
+      "startUrl": "/",
+      "display": "standalone",
+      "icon": "./assets/icon.png"
     },
     "plugins": [
       "expo-router",
