@@ -140,14 +140,14 @@ function ComparisonDashboardContent() {
                         style={[styles.sidebarButton, viewMode === 'comparison' && styles.sidebarButtonActive]}
                         onPress={() => setViewMode('comparison')}
                     >
-                        <Text style={styles.sidebarButtonIcon}>📊</Text>
-                        <Text style={[styles.sidebarButtonText, viewMode === 'comparison' && styles.sidebarButtonTextActive]}>Comparison</Text>
+                        <Text style={styles.sidebarButtonIcon}></Text>
+                        <Text style={[styles.sidebarButtonText, viewMode === 'comparison' && styles.sidebarButtonTextActive]}>Comparison View</Text>
                     </TouchableOpacity>
                     <TouchableOpacity 
                         style={[styles.sidebarButton, viewMode === 'grid' && styles.sidebarButtonActive]}
                         onPress={() => setViewMode('grid')}
                     >
-                        <Text style={styles.sidebarButtonIcon}>▦</Text>
+                        <Text style={styles.sidebarButtonIcon}></Text>
                         <Text style={[styles.sidebarButtonText, viewMode === 'grid' && styles.sidebarButtonTextActive]}>Grid View</Text>
                     </TouchableOpacity>
                 </View>
@@ -376,64 +376,64 @@ function ComparisonDashboardContent() {
 
             {/* Right Insights Panel */}
             {loans.length > 0 && showInsights && (
-                <View style={styles.insightsPanel}>
-                    <Text style={styles.insightsPanelTitle}>💡 Insights</Text>
+                <View style={[styles.insightsPanel, { backgroundColor: colors.card, borderLeftColor: colors.border }]}>
+                    <Text style={[styles.insightsPanelTitle, { color: colors.textPrimary }]}>💡 Insights</Text>
                     
-                    <View style={styles.insightCard}>
-                        <Text style={styles.insightLabel}>Selected Loans</Text>
-                        <Text style={styles.insightValue}>{selectedLoans.size} of {loans.length}</Text>
+                    <View style={[styles.insightCard, { backgroundColor: mode === 'dark' ? colors.backgroundSecondary : 'white', borderColor: colors.border }]}>
+                        <Text style={[styles.insightLabel, { color: colors.textSecondary }]}>Selected Loans</Text>
+                        <Text style={[styles.insightValue, { color: colors.textPrimary }]}>{selectedLoans.size} of {loans.length}</Text>
                     </View>
 
                     {highestRateLoan && (
-                        <View style={styles.insightCard}>
+                        <View style={[styles.insightCard, { backgroundColor: mode === 'dark' ? colors.backgroundSecondary : 'white', borderColor: colors.border }]}>
                             <Text style={styles.insightBadge}>⚠️ Highest Rate</Text>
-                            <Text style={styles.insightLoanName}>{highestRateLoan.name || 'Unnamed'}</Text>
-                            <Text style={styles.insightRate}>{highestRateLoan.interestRate}%</Text>
-                            <Text style={styles.insightText}>
+                            <Text style={[styles.insightLoanName, { color: colors.textPrimary }]}>{highestRateLoan.name || 'Unnamed'}</Text>
+                            <Text style={[styles.insightRate, { color: colors.primary }]}>{highestRateLoan.interestRate}%</Text>
+                            <Text style={[styles.insightText, { color: colors.textSecondary }]}>
                                 Prioritize this loan for extra payments
                             </Text>
                         </View>
                     )}
 
                     {lowestRateLoan && highestRateLoan && lowestRateLoan.id !== highestRateLoan.id && (
-                        <View style={styles.insightCard}>
+                        <View style={[styles.insightCard, { backgroundColor: mode === 'dark' ? colors.backgroundSecondary : 'white', borderColor: colors.border }]}>
                             <Text style={styles.insightBadgeGreen}>✅ Lowest Rate</Text>
-                            <Text style={styles.insightLoanName}>{lowestRateLoan.name || 'Unnamed'}</Text>
-                            <Text style={styles.insightRate}>{lowestRateLoan.interestRate}%</Text>
-                            <Text style={styles.insightText}>
+                            <Text style={[styles.insightLoanName, { color: colors.textPrimary }]}>{lowestRateLoan.name || 'Unnamed'}</Text>
+                            <Text style={[styles.insightRate, { color: colors.primary }]}>{lowestRateLoan.interestRate}%</Text>
+                            <Text style={[styles.insightText, { color: colors.textSecondary }]}>
                                 Most favorable terms
                             </Text>
                         </View>
                     )}
 
                     {selectedLoans.size > 1 && (
-                        <View style={[styles.insightCard, { backgroundColor: '#f8f9fa' }]}>
+                        <View style={[styles.insightCard, { backgroundColor: mode === 'dark' ? colors.backgroundSecondary : '#f8f9fa', borderColor: colors.border }]}>
                             <Text style={styles.insightBadge}>💰 Strategy</Text>
-                            <Text style={styles.insightText}>
+                            <Text style={[styles.insightText, { color: colors.textSecondary }]}>
                                 <Text style={{ fontWeight: '700' }}>Avalanche:</Text> Pay minimums on all, extra to highest rate ({highestRateLoan?.interestRate}%)
                             </Text>
-                            <View style={styles.divider} />
-                            <Text style={styles.insightText}>
+                            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                            <Text style={[styles.insightText, { color: colors.textSecondary }]}>
                                 <Text style={{ fontWeight: '700' }}>Snowball:</Text> Pay off smallest balance first for motivation
                             </Text>
                         </View>
                     )}
 
-                    <View style={styles.insightCard}>
-                        <Text style={styles.insightLabel}>Avg Interest Rate</Text>
-                        <Text style={styles.insightValue}>
+                    <View style={[styles.insightCard, { backgroundColor: mode === 'dark' ? colors.backgroundSecondary : 'white', borderColor: colors.border }]}>
+                        <Text style={[styles.insightLabel, { color: colors.textSecondary }]}>Avg Interest Rate</Text>
+                        <Text style={[styles.insightValue, { color: colors.textPrimary }]}>
                             {selectedLoanObjects.length > 0 
                                 ? (selectedLoanObjects.reduce((sum, l) => sum + l.interestRate, 0) / selectedLoanObjects.length).toFixed(2)
                                 : '0.00'}%
                         </Text>
                     </View>
 
-                    <View style={styles.insightCard}>
-                        <Text style={styles.insightLabel}>Interest Ratio</Text>
-                        <Text style={styles.insightValue}>
+                    <View style={[styles.insightCard, { backgroundColor: mode === 'dark' ? colors.backgroundSecondary : 'white', borderColor: colors.border }]}>
+                        <Text style={[styles.insightLabel, { color: colors.textSecondary }]}>Interest Ratio</Text>
+                        <Text style={[styles.insightValue, { color: colors.textPrimary }]}>
                             {totalBorrowed > 0 ? ((totalInterest / totalBorrowed) * 100).toFixed(1) : '0'}%
                         </Text>
-                        <Text style={styles.insightSubtext}>of principal</Text>
+                        <Text style={[styles.insightSubtext, { color: colors.textTertiary }]}>of principal</Text>
                     </View>
                 </View>
             )}
