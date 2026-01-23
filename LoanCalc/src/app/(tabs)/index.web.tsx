@@ -7,10 +7,10 @@ import { theme } from '../../constants/theme';
 import { cancelLoanNotifications } from '../../utils/notificationUtils';
 import { getCurrencyPreference, Currency } from '../../utils/storage';
 import { formatCurrency } from '../../utils/currencyUtils';
-import EmptyState from '../../components/EmptyState';
-import { DashboardSkeleton } from '../../components/LoadingSkeleton';
-import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
-import { ThemeProvider, useTheme } from '../../contexts/ThemeContext';
+import EmptyState from '../../components/EmptyState.web';
+import { DashboardSkeleton } from '../../components/LoadingSkeleton.web';
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts.web';
+import { ThemeProvider, useTheme } from '../../contexts/ThemeContext.web';
 
 type Loan = {
     id: string;

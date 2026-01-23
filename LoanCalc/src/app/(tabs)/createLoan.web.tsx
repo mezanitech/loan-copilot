@@ -15,8 +15,8 @@ import { scheduleNextPaymentReminder } from "../../utils/notificationUtils";
 import { getNotificationPreferences } from "../../utils/storage";
 import { formatCurrency } from "../../utils/currencyUtils";
 import { incrementProgress } from "../../utils/achievementUtils";
-import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts";
-import { ThemeProvider, useTheme } from "../../contexts/ThemeContext";
+import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts.web";
+import { ThemeProvider, useTheme } from "../../contexts/ThemeContext.web";
 
 function CreateLoanScreenWebContent() {
     const [loanName, setLoanName] = useState("");
