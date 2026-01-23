@@ -1,7 +1,7 @@
 // WEB-SPECIFIC VERSION - Loan Comparison Dashboard
 import { Link, useFocusEffect, useRouter } from "expo-router";
 import { useState, useCallback, useEffect } from "react";
-import { Text, View, StyleSheet, ScrollView, TouchableOpacity, Alert, Animated } from "react-native";
+import { Text, View, StyleSheet, ScrollView, TouchableOpacity, Alert, Animated, Image as RNImage } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { theme } from '../../constants/theme';
 import { cancelLoanNotifications } from '../../utils/notificationUtils';
@@ -40,6 +40,7 @@ function ComparisonDashboardContent() {
     const [sidebarWidth, setSidebarWidth] = useState(260);
     const [isResizingSidebar, setIsResizingSidebar] = useState(false);
     const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200);
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     const router = useRouter();
     const { mode, toggleTheme, colors } = useTheme();
     
@@ -111,6 +112,12 @@ function ComparisonDashboardContent() {
                 setShowInsights(false);
             } else {
                 setShowInsights(true);
+            }
+            // Auto-collapse sidebar on very small screens
+            if (width < 768) {
+                setIsSidebarCollapsed(true);
+            } else {
+                setIsSidebarCollapsed(false);
             }
         };
 
@@ -193,11 +200,48 @@ function ComparisonDashboardContent() {
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
+            {/* Overlay for small screens when sidebar is open */}
+            {!isSidebarCollapsed && windowWidth < 768 && (
+                <TouchableOpacity
+                    style={styles.overlay}
+                    onPress={() => setIsSidebarCollapsed(true)}
+                    activeOpacity={1}
+                />
+            )}
+            
+            {/* Hamburger Menu Button - Only visible when sidebar is collapsed */}
+            {isSidebarCollapsed && (
+                <TouchableOpacity 
+                    style={[styles.hamburgerButton, { backgroundColor: colors.sidebar }]}
+                    onPress={() => setIsSidebarCollapsed(false)}
+                >
+                    <Text style={[styles.hamburgerIcon, { color: colors.textPrimary }]}>☰</Text>
+                </TouchableOpacity>
+            )}
+            
             {/* Left Sidebar */}
-            <View style={{ width: sidebarWidth, position: 'relative' }}>
+            {!isSidebarCollapsed && (
+                <View style={{ 
+                    width: windowWidth < 768 ? 280 : sidebarWidth, 
+                    position: windowWidth < 768 ? 'absolute' : 'relative',
+                    zIndex: windowWidth < 768 ? 999 : 1,
+                    height: windowWidth < 768 ? '100%' : 'auto',
+                }}>
                 <ScrollView style={[styles.sidebar, { backgroundColor: colors.sidebar, width: '100%' }]}>
                     <View style={styles.sidebarHeader}>
-                        <Text style={[styles.appTitle, { color: colors.sidebarTextActive }]}>💰 Loan Co-Pilot</Text>
+                        <View style={styles.appTitleContainer}>
+                            <RNImage source={require('../../../assets/icon.png')} style={{ width: 32, height: 32, marginRight: 12, borderRadius: 6 }} />
+                            <Text style={[styles.appTitle, { color: colors.sidebarTextActive }]}>Loan Co-Pilot</Text>
+                        </View>
+                        {/* Close button for small screens */}
+                        {windowWidth < 768 && (
+                            <TouchableOpacity 
+                                style={styles.closeSidebarButton}
+                                onPress={() => setIsSidebarCollapsed(true)}
+                            >
+                                <Text style={[styles.closeSidebarIcon, { color: colors.textPrimary }]}>✕</Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
 
                 <View style={styles.sidebarSection}>
@@ -269,7 +313,8 @@ function ComparisonDashboardContent() {
                     }}
                     onMouseDown={() => setIsResizingSidebar(true)}
                 />
-            </View>
+                </View>
+            )}
 
             {/* Main Content */}
             <ScrollView style={[styles.mainContent, { backgroundColor: colors.backgroundSecondary }]}>
@@ -553,11 +598,52 @@ const createStyles = (colors: any, mode: string) => StyleSheet.create({
         padding: 20,
         borderBottomWidth: 1,
         borderBottomColor: colors.border,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    appTitleContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
     },
     appTitle: {
         fontSize: 18,
         fontWeight: 'bold',
         color: 'white',
+    },
+    closeSidebarButton: {
+        padding: 8,
+        borderRadius: 4,
+    },
+    closeSidebarIcon: {
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    hamburgerButton: {
+        position: 'absolute' as any,
+        top: 16,
+        left: 16,
+        zIndex: 1000,
+        padding: 12,
+        borderRadius: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 4,
+    },
+    hamburgerIcon: {
+        fontSize: 24,
+        fontWeight: 'bold',
+    },
+    overlay: {
+        position: 'absolute' as any,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        zIndex: 998,
     },
     sidebarSection: {
         padding: 16,

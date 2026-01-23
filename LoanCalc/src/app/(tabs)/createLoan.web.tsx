@@ -1,6 +1,6 @@
 // WEB-SPECIFIC VERSION - Create Loan Page
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Text, View, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Animated } from "react-native";
+import { Text, View, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Animated, Image as RNImage } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect, Link } from 'expo-router';
 import { theme } from '../../constants/theme';
@@ -353,14 +353,17 @@ function CreateLoanScreenWebContent() {
                 <View style={{ width: sidebarWidth, position: 'relative' }}>
                     <ScrollView style={[styles.sidebar, { backgroundColor: colors.sidebar, width: '100%' }]}>
                         <View style={styles.sidebarHeader}>
-                            <Text style={[styles.appTitle, { color: colors.sidebarTextActive }]}>💰 Loan Co-Pilot</Text>
+                            <View style={styles.appTitleContainer}>
+                                <RNImage source={require('../../../assets/icon.png')} style={{ width: 32, height: 32, marginRight: 12, borderRadius: 6 }} />
+                                <Text style={[styles.appTitle, { color: colors.sidebarTextActive }]}>Loan Co-Pilot</Text>
+                            </View>
                         </View>
 
                     <View style={styles.sidebarSection}>
                         <Text style={styles.sidebarLabel}>NAVIGATION</Text>
                         <Link href="/(tabs)" asChild>
                             <TouchableOpacity style={styles.sidebarButton}>
-                                <Text style={styles.sidebarButtonIcon}>📊</Text>
+                                <Text style={styles.sidebarButtonIcon}></Text>
                                 <Text style={styles.sidebarButtonText}>Dashboard</Text>
                             </TouchableOpacity>
                         </Link>
@@ -686,6 +689,10 @@ const createStyles = (colors: any, mode: string) => StyleSheet.create({
         padding: 20,
         borderBottomWidth: 1,
         borderBottomColor: colors.border,
+    },
+    appTitleContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
     },
     appTitle: {
         fontSize: 18,
