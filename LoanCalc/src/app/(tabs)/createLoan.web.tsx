@@ -420,7 +420,7 @@ function CreateLoanScreenWebContent() {
                     <View style={styles.sidebarFooter}>
                         <TouchableOpacity 
                             style={styles.appStoreBanner}
-                            onPress={() => typeof window !== 'undefined' && window.open('https://apps.apple.com/co/app/loan-co-pilot/id6757390003', '_blank')}
+                            onPress={() => typeof window !== 'undefined' && window.open('https://apps.apple.com/app/apple-store/id6757390003?pt=128423727&ct=WebRef&mt=8', '_blank')}
                         >
                             <View style={styles.appStoreBannerContent}>
                                 <View style={styles.appStoreIconContainer}>

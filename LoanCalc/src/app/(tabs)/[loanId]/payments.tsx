@@ -6,8 +6,9 @@ import { theme } from '../../../constants/theme';
 import EarlyPaymentList, { EarlyPayment, EarlyPaymentListRef } from "../../../components/EarlyPaymentList";
 import RateAdjustmentList, { RateAdjustment, RateAdjustmentListRef } from "../../../components/RateAdjustmentList";
 import { AutoSaveIndicator, AutoSaveHandle } from "../../../components/AutoSaveIndicator";
-import { calculatePayment, generatePaymentSchedule } from "../../../utils/loanCalculations";
+import { calculatePayment, generatePaymentSchedule, PaymentDetail } from "../../../utils/loanCalculations";
 import { incrementProgress, updateProgress } from "../../../utils/achievementUtils";
+import { Loan } from "../../../utils/storage";
 
 export default function PaymentsScreen() {
     const params = useGlobalSearchParams();
@@ -209,7 +210,7 @@ export default function PaymentsScreen() {
                 
                 // Track achievements - always update counts
                 // Count total early payments across all loans (after saving)
-                const totalEarlyPayments = loans.reduce((sum, loan) => 
+                const totalEarlyPayments = loans.reduce((sum: number, loan: Loan) => 
                     sum + (loan.earlyPayments?.length || 0), 0
                 );
                 await updateProgress('total_early_payments', totalEarlyPayments);
@@ -223,7 +224,7 @@ export default function PaymentsScreen() {
                 }
                 
                 // Count total rate adjustments across all loans (after saving)
-                const totalRateAdjustments = loans.reduce((sum, loan) => 
+                const totalRateAdjustments = loans.reduce((sum: number, loan: Loan) => 
                     sum + (loan.rateAdjustments?.length || 0), 0
                 );
                 if (totalRateAdjustments > 0) {
@@ -243,8 +244,8 @@ export default function PaymentsScreen() {
                     });
                     
                     // Compare to schedule with BOTH rate adjustments AND early payments
-                    const interestWithOnlyRates = scheduleWithOnlyRates.reduce((sum, payment) => sum + payment.interest, 0);
-                    const interestWithBoth = schedule.reduce((sum, payment) => sum + payment.interest, 0);
+                    const interestWithOnlyRates = scheduleWithOnlyRates.reduce((sum: number, payment: PaymentDetail) => sum + payment.interest, 0);
+                    const interestWithBoth = schedule.reduce((sum: number, payment: PaymentDetail) => sum + payment.interest, 0);
                     const interestSaved = Math.max(0, interestWithOnlyRates - interestWithBoth);
                     const monthsSaved = Math.max(0, scheduleWithOnlyRates.length - schedule.length);
                     

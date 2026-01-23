@@ -1,6 +1,6 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image as RNImage } from 'react-native';
-import { theme } from '../constants/theme';
+import { View, Text, TouchableOpacity, Image as RNImage } from 'react-native';
 import { Link } from 'expo-router';
+import { useTheme } from '../contexts/ThemeContext.web';
 
 type EmptyStateProps = {
     title: string;
@@ -11,68 +11,55 @@ type EmptyStateProps = {
 };
 
 export default function EmptyState({ title, description, actionText, actionLink, icon = "📊" }: EmptyStateProps) {
+    const { colors } = useTheme();
+    
     return (
-        <View style={styles.container}>
+        <View style={{
+            flex: 1,
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 40,
+            minHeight: 400,
+        }}>
             <RNImage 
                 source={require('../../assets/icon.png')} 
-                style={styles.iconImage}
+                style={{
+                    width: 96,
+                    height: 96,
+                    marginBottom: 20,
+                    opacity: 0.9,
+                    borderRadius: 20,
+                }}
             />
-            <Text style={styles.title}>{title}</Text>
-            <Text style={styles.description}>{description}</Text>
+            <Text style={{
+                fontSize: 20,
+                fontWeight: '700',
+                color: colors.textPrimary,
+                marginBottom: 12,
+                textAlign: 'center',
+            }}>{title}</Text>
+            <Text style={{
+                fontSize: 16,
+                color: colors.textSecondary,
+                textAlign: 'center',
+                marginBottom: 20,
+                maxWidth: 400,
+                lineHeight: 24,
+            }}>{description}</Text>
             <Link href={actionLink as any} asChild>
-                <TouchableOpacity style={styles.button}>
-                    <Text style={styles.buttonText}>{actionText}</Text>
+                <TouchableOpacity style={{
+                    backgroundColor: colors.primary,
+                    paddingHorizontal: 20,
+                    paddingVertical: 12,
+                    borderRadius: 12,
+                }}>
+                    <Text style={{
+                        color: '#FFFFFF',
+                        fontSize: 16,
+                        fontWeight: '600',
+                    }}>{actionText}</Text>
                 </TouchableOpacity>
             </Link>
         </View>
     );
 }
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: theme.spacing.xl * 2,
-        minHeight: 400,
-    },
-    icon: {
-        fontSize: 64,
-        marginBottom: theme.spacing.xl,
-        opacity: 0.8,
-    },
-    iconImage: {
-        width: 96,
-        height: 96,
-        marginBottom: theme.spacing.xl,
-        opacity: 0.9,
-        borderRadius: 20,
-    },
-    title: {
-        fontSize: theme.fontSize.xl,
-        fontWeight: theme.fontWeight.bold,
-        color: theme.colors.textPrimary,
-        marginBottom: theme.spacing.md,
-        textAlign: 'center',
-    },
-    description: {
-        fontSize: theme.fontSize.base,
-        color: theme.colors.textSecondary,
-        textAlign: 'center',
-        marginBottom: theme.spacing.xl,
-        maxWidth: 400,
-        lineHeight: 24,
-    },
-    button: {
-        backgroundColor: theme.colors.primary,
-        paddingHorizontal: theme.spacing.xl,
-        paddingVertical: theme.spacing.md,
-        borderRadius: theme.borderRadius.md,
-        ...theme.shadows.md,
-    },
-    buttonText: {
-        color: theme.colors.textInverse,
-        fontSize: theme.fontSize.base,
-        fontWeight: theme.fontWeight.semibold,
-    },
-});

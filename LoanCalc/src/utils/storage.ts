@@ -12,6 +12,7 @@ export type Loan = {
     totalPayment: number;
     createdAt: string;
     earlyPayments?: any[];
+    rateAdjustments?: any[];
     scheduledNotificationIds?: string[];
 };
 

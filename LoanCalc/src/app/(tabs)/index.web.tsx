@@ -11,6 +11,7 @@ import EmptyState from '../../components/EmptyState.web';
 import { DashboardSkeleton } from '../../components/LoadingSkeleton.web';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts.web';
 import { ThemeProvider, useTheme } from '../../contexts/ThemeContext.web';
+import MobileAppPromotion from '../../components/MobileAppPromotion.web';
 
 type Loan = {
     id: string;
@@ -212,7 +213,14 @@ function ComparisonDashboardContent() {
             {/* Hamburger Menu Button - Only visible when sidebar is collapsed */}
             {isSidebarCollapsed && (
                 <TouchableOpacity 
-                    style={[styles.hamburgerButton, { backgroundColor: colors.sidebar }]}
+                    style={[
+                        styles.hamburgerButton, 
+                        { 
+                            backgroundColor: mode === 'dark' ? colors.sidebar : colors.card,
+                            borderWidth: mode === 'dark' ? 0 : 1,
+                            borderColor: mode === 'dark' ? 'transparent' : colors.border,
+                        }
+                    ]}
                     onPress={() => setIsSidebarCollapsed(false)}
                 >
                     <Text style={[styles.hamburgerIcon, { color: colors.textPrimary }]}>☰</Text>
@@ -285,7 +293,7 @@ function ComparisonDashboardContent() {
                 <View style={styles.sidebarFooter}>
                     <TouchableOpacity 
                         style={styles.appStoreBanner}
-                        onPress={() => typeof window !== 'undefined' && window.open('https://apps.apple.com/co/app/loan-co-pilot/id6757390003', '_blank')}
+                        onPress={() => typeof window !== 'undefined' && window.open('https://apps.apple.com/app/apple-store/id6757390003?pt=128423727&ct=WebRef&mt=8', '_blank')}
                     >
                         <View style={styles.appStoreBannerContent}>
                             <View style={styles.appStoreIconContainer}>
@@ -516,7 +524,7 @@ function ComparisonDashboardContent() {
             </ScrollView>
 
             {/* Right Insights Panel - Conditionally shown */}
-            {windowWidth >= 1200 && showInsights && loans.length > 0 && (
+            {windowWidth >= 1200 && showInsights && (
                 <View style={{ width: insightsPanelWidth, position: 'relative' }}>
                     {/* Resize Handle */}
                     <div
@@ -591,6 +599,13 @@ function ComparisonDashboardContent() {
                         </Text>
                         <Text style={[styles.insightSubtext, { color: colors.textTertiary }]}>of principal</Text>
                     </View>
+
+                    {/* Mobile App Promotional Banner */}
+                    <MobileAppPromotion 
+                        insightCardStyle={styles.insightCard}
+                        insightBadgeStyle={styles.insightBadge}
+                        insightTextStyle={styles.insightText}
+                    />
                     </ScrollView>
                 </View>
             )}
