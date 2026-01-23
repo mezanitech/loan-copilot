@@ -1,17 +1,13 @@
-// WEB-SPECIFIC VERSION - This file is ONLY used on web browsers
-// The mobile app (iOS/Android) will continue using index.tsx
-
+// WEB-SPECIFIC VERSION - Loan Comparison Dashboard
 import { Link, useFocusEffect, useRouter } from "expo-router";
 import { useState, useCallback } from "react";
-import { Text, View, StyleSheet, ScrollView, TouchableOpacity, Alert, Image } from "react-native";
+import { Text, View, StyleSheet, ScrollView, TouchableOpacity, Alert } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { theme } from '../../constants/theme';
-import PieChart from '../../components/PieChart';
 import { cancelLoanNotifications } from '../../utils/notificationUtils';
 import { getCurrencyPreference, Currency } from '../../utils/storage';
 import { formatCurrency } from '../../utils/currencyUtils';
 
-// Define the structure of a Loan object
 type Loan = {
     id: string;
     name?: string;
@@ -26,17 +22,23 @@ type Loan = {
     scheduledNotificationIds?: string[];
 };
 
-export default function DashboardScreen() {
+type ViewMode = 'comparison' | 'grid' | 'list';
+
+export default function ComparisonDashboard() {
     const [loans, setLoans] = useState<Loan[]>([]);
-    const [expandedLoans, setExpandedLoans] = useState<Set<string>>(new Set());
+    const [selectedLoans, setSelectedLoans] = useState<Set<string>>(new Set());
     const [currency, setCurrency] = useState<Currency>({ code: 'USD', symbol: '$', name: 'US Dollar', position: 'before' });
+    const [viewMode, setViewMode] = useState<ViewMode>('comparison');
+    const [showInsights, setShowInsights] = useState(true);
     const router = useRouter();
 
     const loadLoans = async () => {
         try {
             const storedLoans = await AsyncStorage.getItem('loans');
             if (storedLoans) {
-                setLoans(JSON.parse(storedLoans));
+                const parsedLoans = JSON.parse(storedLoans);
+                setLoans(parsedLoans);
+                setSelectedLoans(new Set(parsedLoans.map((l: Loan) => l.id)));
             }
         } catch (error) {
             console.error('Failed to load loans:', error);
@@ -55,9 +57,29 @@ export default function DashboardScreen() {
         setCurrency(curr);
     };
 
-    const totalBorrowed = loans.reduce((sum, loan) => sum + loan.amount, 0);
-    const totalMonthlyPayment = loans.reduce((sum, loan) => sum + loan.monthlyPayment, 0);
-    const totalRemaining = loans.reduce((sum, loan) => sum + loan.totalPayment, 0);
+    const toggleLoanSelection = (loanId: string) => {
+        const newSelection = new Set(selectedLoans);
+        if (newSelection.has(loanId)) {
+            newSelection.delete(loanId);
+        } else {
+            newSelection.add(loanId);
+        }
+        setSelectedLoans(newSelection);
+    };
+
+    const selectedLoanObjects = loans.filter(loan => selectedLoans.has(loan.id));
+    
+    const totalBorrowed = selectedLoanObjects.reduce((sum, loan) => sum + loan.amount, 0);
+    const totalMonthlyPayment = selectedLoanObjects.reduce((sum, loan) => sum + loan.monthlyPayment, 0);
+    const totalToPay = selectedLoanObjects.reduce((sum, loan) => sum + loan.totalPayment, 0);
+    const totalInterest = totalToPay - totalBorrowed;
+
+    const highestRateLoan = selectedLoanObjects.length > 0 
+        ? selectedLoanObjects.reduce((max, loan) => loan.interestRate > max.interestRate ? loan : max)
+        : null;
+    const lowestRateLoan = selectedLoanObjects.length > 0 
+        ? selectedLoanObjects.reduce((min, loan) => loan.interestRate < min.interestRate ? loan : min)
+        : null;
 
     const deleteAllLoans = async () => {
         Alert.alert(
@@ -77,6 +99,7 @@ export default function DashboardScreen() {
                             }
                             await AsyncStorage.setItem('loans', JSON.stringify([]));
                             setLoans([]);
+                            setSelectedLoans(new Set());
                             Alert.alert("Success", "All loans have been deleted.");
                         } catch (error) {
                             console.error('Failed to delete loans:', error);
@@ -89,462 +112,749 @@ export default function DashboardScreen() {
     };
 
     return (
-        <View style={styles.webContainer}>
-            {/* Header */}
-            <View style={styles.webHeader}>
-                <View style={styles.headerContent}>
-                    <Image 
-                        source={require('../../../assets/icon.png')} 
-                        style={styles.logo}
-                        resizeMode="contain"
-                    />
-                    <View style={styles.headerTextContainer}>
-                        <Text style={styles.webTitle}>Loan Co-Pilot</Text>
-                        <Text style={styles.webSubtitle}>Your intelligent companion for loan management and financial freedom</Text>
-                    </View>
+        <View style={styles.container}>
+            {/* Left Sidebar */}
+            <View style={styles.sidebar}>
+                <View style={styles.sidebarHeader}>
+                    <Text style={styles.appTitle}>💰 Loan Co-Pilot</Text>
+                </View>
+
+                <View style={styles.sidebarSection}>
+                    <Text style={styles.sidebarLabel}>NAVIGATION</Text>
+                    <TouchableOpacity 
+                        style={[styles.sidebarButton, viewMode === 'comparison' && styles.sidebarButtonActive]}
+                        onPress={() => setViewMode('comparison')}
+                    >
+                        <Text style={styles.sidebarButtonIcon}>📊</Text>
+                        <Text style={[styles.sidebarButtonText, viewMode === 'comparison' && styles.sidebarButtonTextActive]}>Comparison</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                        style={[styles.sidebarButton, viewMode === 'grid' && styles.sidebarButtonActive]}
+                        onPress={() => setViewMode('grid')}
+                    >
+                        <Text style={styles.sidebarButtonIcon}>▦</Text>
+                        <Text style={[styles.sidebarButtonText, viewMode === 'grid' && styles.sidebarButtonTextActive]}>Grid View</Text>
+                    </TouchableOpacity>
+                </View>
+
+                <View style={styles.sidebarSection}>
+                    <Text style={styles.sidebarLabel}>MY LOANS ({loans.length})</Text>
+                    <ScrollView style={styles.loansList}>
+                        {loans.map((loan) => (
+                            <TouchableOpacity
+                                key={loan.id}
+                                style={styles.loanItem}
+                                onPress={() => router.push(`/${loan.id}/overview`)}
+                            >
+                                <Text style={styles.loanItemName} numberOfLines={1}>
+                                    {loan.name || 'Unnamed Loan'}
+                                </Text>
+                                <Text style={styles.loanItemAmount}>
+                                    {formatCurrency(loan.amount, currency, 0)}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
+
+                <View style={styles.sidebarFooter}>
+                    <Link href="/createLoan" asChild>
+                        <TouchableOpacity style={styles.newLoanButton}>
+                            <Text style={styles.newLoanButtonText}>+ New Loan</Text>
+                        </TouchableOpacity>
+                    </Link>
+                    {loans.length > 0 && (
+                        <TouchableOpacity style={styles.deleteAllButton} onPress={deleteAllLoans}>
+                            <Text style={styles.deleteAllButtonText}>Delete All</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
             </View>
 
-            {/* Main Content - Centered with max width */}
-            <ScrollView style={styles.scrollView} contentContainerStyle={styles.webContentContainer}>
-                
-                {/* Hero Section for Empty State */}
+            {/* Main Content */}
+            <ScrollView style={styles.mainContent}>
                 {loans.length === 0 && (
-                    <View style={styles.heroSection}>
-                        <Text style={styles.heroTitle}>Take Control of Your Loans</Text>
-                        <Text style={styles.heroDescription}>
-                            Loan Co-Pilot helps you visualize, track, and optimize your loan payments. 
-                            Whether you're managing a mortgage, student loan, car loan, or any other debt, 
-                            our powerful calculator shows you exactly how your payments impact your balance over time.
+                    <View style={styles.emptyState}>
+                        <Text style={styles.emptyIcon}>📊</Text>
+                        <Text style={styles.emptyTitle}>No Loans Yet</Text>
+                        <Text style={styles.emptyText}>
+                            Create your first loan to start comparing and optimizing your debt payoff strategy.
                         </Text>
-                        <View style={styles.featureGrid}>
-                            <View style={styles.featureCard}>
-                                <Text style={styles.featureIcon}>📊</Text>
-                                <Text style={styles.featureTitle}>Visual Analytics</Text>
-                                <Text style={styles.featureText}>
-                                    See your loan progress with interactive charts and detailed payment schedules
-                                </Text>
-                            </View>
-                            <View style={styles.featureCard}>
-                                <Text style={styles.featureIcon}>💰</Text>
-                                <Text style={styles.featureTitle}>Extra Payments</Text>
-                                <Text style={styles.featureText}>
-                                    Model the impact of extra payments and see how much interest you can save
-                                </Text>
-                            </View>
-                            <View style={styles.featureCard}>
-                                <Text style={styles.featureIcon}>📈</Text>
-                                <Text style={styles.featureTitle}>Rate Adjustments</Text>
-                                <Text style={styles.featureText}>
-                                    Track variable rate changes and see how they affect your total payment
-                                </Text>
-                            </View>
-                        </View>
                         <Link href="/createLoan" asChild>
-                            <TouchableOpacity style={styles.heroCTA}>
-                                <Text style={styles.heroCTAText}>Create Your First Loan</Text>
+                            <TouchableOpacity style={styles.emptyButton}>
+                                <Text style={styles.emptyButtonText}>Create Your First Loan</Text>
                             </TouchableOpacity>
                         </Link>
                     </View>
                 )}
 
-                {/* Summary Cards - Only show if there are loans */}
                 {loans.length > 0 && (
                     <>
-                        <View style={styles.dashboardIntro}>
-                            <Text style={styles.dashboardTitle}>Your Loan Portfolio</Text>
-                            <Text style={styles.dashboardDescription}>
-                                Track all your loans in one place. Below is a summary of your total debt, monthly obligations, and remaining balance.
-                            </Text>
-                        </View>
-                        
-                        <View style={styles.webSummaryRow}>
-                            <View style={styles.webCard}>
-                                <Text style={styles.cardIcon}>💳</Text>
-                                <Text style={styles.cardLabel}>Total Principal Borrowed</Text>
-                                <Text style={styles.cardValue}>{formatCurrency(totalBorrowed, currency, 0)}</Text>
-                                <Text style={styles.cardDescription}>Original amount borrowed across all loans</Text>
+                        {/* Top Stats Bar */}
+                        <View style={styles.statsBar}>
+                            <View style={styles.statItem}>
+                                <Text style={styles.statValue}>{formatCurrency(totalBorrowed, currency, 0)}</Text>
+                                <Text style={styles.statLabel}>Total Principal</Text>
                             </View>
-                            <View style={styles.webCard}>
-                                <Text style={styles.cardIcon}>📅</Text>
-                                <Text style={styles.cardLabel}>Monthly Payment</Text>
-                                <Text style={styles.cardValue}>{formatCurrency(totalMonthlyPayment, currency, 0)}</Text>
-                                <Text style={styles.cardDescription}>Combined monthly payment across all loans</Text>
+                            <View style={styles.statDivider} />
+                            <View style={styles.statItem}>
+                                <Text style={styles.statValue}>{formatCurrency(totalMonthlyPayment, currency, 0)}</Text>
+                                <Text style={styles.statLabel}>Monthly Payment</Text>
                             </View>
-                            <View style={styles.webCard}>
-                                <Text style={styles.cardIcon}>🎯</Text>
-                                <Text style={styles.cardLabel}>Total Remaining</Text>
-                                <Text style={styles.cardValue}>{formatCurrency(totalRemaining, currency, 0)}</Text>
-                                <Text style={styles.cardDescription}>Total amount to be paid including interest</Text>
+                            <View style={styles.statDivider} />
+                            <View style={styles.statItem}>
+                                <Text style={[styles.statValue, { color: '#e67e22' }]}>{formatCurrency(totalInterest, currency, 0)}</Text>
+                                <Text style={styles.statLabel}>Total Interest</Text>
+                            </View>
+                            <View style={styles.statDivider} />
+                            <View style={styles.statItem}>
+                                <Text style={styles.statValue}>{formatCurrency(totalToPay, currency, 0)}</Text>
+                                <Text style={styles.statLabel}>Total Payoff</Text>
                             </View>
                         </View>
+
+                        {/* Comparison Table View */}
+                        {viewMode === 'comparison' && (
+                            <View style={styles.section}>
+                                <View style={styles.sectionHeader}>
+                                    <Text style={styles.sectionTitle}>Loan Comparison Table</Text>
+                                    <TouchableOpacity 
+                                        style={styles.toggleInsightsButton}
+                                        onPress={() => setShowInsights(!showInsights)}
+                                    >
+                                        <Text style={styles.toggleInsightsText}>
+                                            {showInsights ? '👁️ Hide' : '👁️ Show'} Insights
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+
+                                <View style={styles.comparisonTable}>
+                                    <View style={styles.tableHeader}>
+                                        <View style={[styles.tableCell, styles.tableHeaderCell, { flex: 2 }]}>
+                                            <Text style={styles.tableHeaderText}>Loan Name</Text>
+                                        </View>
+                                        <View style={[styles.tableCell, styles.tableHeaderCell, { flex: 1.3 }]}>
+                                            <Text style={styles.tableHeaderText}>Principal</Text>
+                                        </View>
+                                        <View style={[styles.tableCell, styles.tableHeaderCell, { flex: 0.8 }]}>
+                                            <Text style={styles.tableHeaderText}>Rate</Text>
+                                        </View>
+                                        <View style={[styles.tableCell, styles.tableHeaderCell, { flex: 0.8 }]}>
+                                            <Text style={styles.tableHeaderText}>Term</Text>
+                                        </View>
+                                        <View style={[styles.tableCell, styles.tableHeaderCell, { flex: 1.2 }]}>
+                                            <Text style={styles.tableHeaderText}>Monthly</Text>
+                                        </View>
+                                        <View style={[styles.tableCell, styles.tableHeaderCell, { flex: 1.3 }]}>
+                                            <Text style={styles.tableHeaderText}>Interest</Text>
+                                        </View>
+                                        <View style={[styles.tableCell, styles.tableHeaderCell, { flex: 1.3 }]}>
+                                            <Text style={styles.tableHeaderText}>Total</Text>
+                                        </View>
+                                        <View style={[styles.tableCell, styles.tableHeaderCell, { flex: 0.6 }]}>
+                                            <Text style={styles.tableHeaderText}>•</Text>
+                                        </View>
+                                    </View>
+
+                                    {loans.map((loan, index) => {
+                                        const isSelected = selectedLoans.has(loan.id);
+                                        const loanInterest = loan.totalPayment - loan.amount;
+                                        
+                                        return (
+                                            <View 
+                                                key={loan.id} 
+                                                style={[
+                                                    styles.tableRow,
+                                                    index % 2 === 0 && styles.tableRowEven,
+                                                    isSelected && styles.tableRowSelected
+                                                ]}
+                                            >
+                                                <TouchableOpacity 
+                                                    style={[styles.tableCell, { flex: 2 }]}
+                                                    onPress={() => router.push(`/${loan.id}/overview`)}
+                                                >
+                                                    <Text style={styles.loanNameCell}>{loan.name || 'Unnamed Loan'}</Text>
+                                                </TouchableOpacity>
+                                                <View style={[styles.tableCell, { flex: 1.3 }]}>
+                                                    <Text style={styles.tableCellText}>{formatCurrency(loan.amount, currency, 0)}</Text>
+                                                </View>
+                                                <View style={[styles.tableCell, { flex: 0.8 }]}>
+                                                    <Text style={styles.tableCellText}>{loan.interestRate}%</Text>
+                                                </View>
+                                                <View style={[styles.tableCell, { flex: 0.8 }]}>
+                                                    <Text style={styles.tableCellText}>{loan.term} {loan.termUnit === 'years' ? 'yr' : 'mo'}</Text>
+                                                </View>
+                                                <View style={[styles.tableCell, { flex: 1.2 }]}>
+                                                    <Text style={styles.tableCellText}>{formatCurrency(loan.monthlyPayment, currency)}</Text>
+                                                </View>
+                                                <View style={[styles.tableCell, { flex: 1.3 }]}>
+                                                    <Text style={[styles.tableCellText, styles.interestText]}>{formatCurrency(loanInterest, currency, 0)}</Text>
+                                                </View>
+                                                <View style={[styles.tableCell, { flex: 1.3 }]}>
+                                                    <Text style={styles.tableCellText}>{formatCurrency(loan.totalPayment, currency, 0)}</Text>
+                                                </View>
+                                                <TouchableOpacity 
+                                                    style={[styles.tableCell, { flex: 0.6 }]}
+                                                    onPress={() => toggleLoanSelection(loan.id)}
+                                                >
+                                                    <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                                                        {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                                                    </View>
+                                                </TouchableOpacity>
+                                            </View>
+                                        );
+                                    })}
+                                </View>
+                            </View>
+                        )}
+
+                        {/* Grid View */}
+                        {viewMode === 'grid' && (
+                            <View style={styles.section}>
+                                <Text style={styles.sectionTitle}>All Loans</Text>
+                                <View style={styles.loansGrid}>
+                                    {loans.map((loan) => {
+                                        const loanInterest = loan.totalPayment - loan.amount;
+                                        const isSelected = selectedLoans.has(loan.id);
+                                        
+                                        return (
+                                            <TouchableOpacity
+                                                key={loan.id}
+                                                style={[styles.gridCard, isSelected && styles.gridCardSelected]}
+                                                onPress={() => router.push(`/${loan.id}/overview`)}
+                                            >
+                                                <View style={styles.gridCardHeader}>
+                                                    <Text style={styles.gridCardName}>{loan.name || 'Unnamed Loan'}</Text>
+                                                    <TouchableOpacity 
+                                                        style={styles.gridCardCheckbox}
+                                                        onPress={(e) => {
+                                                            e.stopPropagation();
+                                                            toggleLoanSelection(loan.id);
+                                                        }}
+                                                    >
+                                                        <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                                                            {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                                                        </View>
+                                                    </TouchableOpacity>
+                                                </View>
+                                                <Text style={styles.gridCardAmount}>{formatCurrency(loan.amount, currency, 0)}</Text>
+                                                <View style={styles.gridCardRow}>
+                                                    <Text style={styles.gridCardLabel}>Rate:</Text>
+                                                    <Text style={styles.gridCardValue}>{loan.interestRate}%</Text>
+                                                </View>
+                                                <View style={styles.gridCardRow}>
+                                                    <Text style={styles.gridCardLabel}>Term:</Text>
+                                                    <Text style={styles.gridCardValue}>{loan.term} {loan.termUnit}</Text>
+                                                </View>
+                                                <View style={styles.gridCardRow}>
+                                                    <Text style={styles.gridCardLabel}>Monthly:</Text>
+                                                    <Text style={styles.gridCardValue}>{formatCurrency(loan.monthlyPayment, currency)}</Text>
+                                                </View>
+                                                <View style={styles.gridCardRow}>
+                                                    <Text style={styles.gridCardLabel}>Interest:</Text>
+                                                    <Text style={[styles.gridCardValue, { color: '#e67e22' }]}>{formatCurrency(loanInterest, currency, 0)}</Text>
+                                                </View>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+                            </View>
+                        )}
                     </>
                 )}
-
-                {/* Loans Grid */}
-                {loans.length > 0 && (
-                    <View style={styles.loansSection}>
-                        <View style={styles.loansSectionHeader}>
-                            <View>
-                                <Text style={styles.sectionTitle}>Active Loans ({loans.length})</Text>
-                                <Text style={styles.sectionDescription}>
-                                    Click on any loan to view detailed payment schedules, charts, and make adjustments
-                                </Text>
-                            </View>
-                            <Link href="/createLoan" asChild>
-                                <TouchableOpacity style={styles.addButton}>
-                                    <Text style={styles.addButtonText}>+ Add Loan</Text>
-                                </TouchableOpacity>
-                            </Link>
-                        </View>
-
-                        <View style={styles.webLoansGrid}>
-                            {loans.map((loan) => (
-                                <TouchableOpacity
-                                    key={loan.id}
-                                    style={styles.webLoanCard}
-                                    onPress={() => router.push(`/${loan.id}/overview`)}
-                                >
-                                    <Text style={styles.loanName}>{loan.name || 'Unnamed Loan'}</Text>
-                                    <Text style={styles.loanAmount}>{formatCurrency(loan.amount, currency, 0)}</Text>
-                                    <View style={styles.loanDetails}>
-                                        <Text style={styles.loanDetail}>{loan.interestRate}% APR</Text>
-                                        <Text style={styles.loanDetail}>•</Text>
-                                        <Text style={styles.loanDetail}>{loan.term} {loan.termUnit}</Text>
-                                    </View>
-                                    <View style={styles.loanMonthlyContainer}>
-                                        <Text style={styles.loanMonthly}>{formatCurrency(loan.monthlyPayment, currency)}</Text>
-                                        <Text style={styles.loanMonthlyLabel}>/month</Text>
-                                    </View>
-                                    <Text style={styles.viewDetailsText}>Click to view details →</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    </View>
-                )}
-
-                {/* Actions */}
-                {loans.length > 0 && (
-                    <View style={styles.actionsSection}>
-                        <TouchableOpacity style={styles.deleteButton} onPress={deleteAllLoans}>
-                            <Text style={styles.deleteButtonText}>Delete All Loans</Text>
-                        </TouchableOpacity>
-                    </View>
-                )}
-
-                {/* Footer */}
-                <View style={styles.footer}>
-                    <Text style={styles.footerText}>
-                        © 2026 Loan Co-Pilot. All loan calculations are estimates. 
-                        Please consult with a financial advisor for personalized advice.
-                    </Text>
-                </View>
             </ScrollView>
+
+            {/* Right Insights Panel */}
+            {loans.length > 0 && showInsights && (
+                <View style={styles.insightsPanel}>
+                    <Text style={styles.insightsPanelTitle}>💡 Insights</Text>
+                    
+                    <View style={styles.insightCard}>
+                        <Text style={styles.insightLabel}>Selected Loans</Text>
+                        <Text style={styles.insightValue}>{selectedLoans.size} of {loans.length}</Text>
+                    </View>
+
+                    {highestRateLoan && (
+                        <View style={styles.insightCard}>
+                            <Text style={styles.insightBadge}>⚠️ Highest Rate</Text>
+                            <Text style={styles.insightLoanName}>{highestRateLoan.name || 'Unnamed'}</Text>
+                            <Text style={styles.insightRate}>{highestRateLoan.interestRate}%</Text>
+                            <Text style={styles.insightText}>
+                                Prioritize this loan for extra payments
+                            </Text>
+                        </View>
+                    )}
+
+                    {lowestRateLoan && highestRateLoan && lowestRateLoan.id !== highestRateLoan.id && (
+                        <View style={styles.insightCard}>
+                            <Text style={styles.insightBadgeGreen}>✅ Lowest Rate</Text>
+                            <Text style={styles.insightLoanName}>{lowestRateLoan.name || 'Unnamed'}</Text>
+                            <Text style={styles.insightRate}>{lowestRateLoan.interestRate}%</Text>
+                            <Text style={styles.insightText}>
+                                Most favorable terms
+                            </Text>
+                        </View>
+                    )}
+
+                    {selectedLoans.size > 1 && (
+                        <View style={[styles.insightCard, { backgroundColor: '#f8f9fa' }]}>
+                            <Text style={styles.insightBadge}>💰 Strategy</Text>
+                            <Text style={styles.insightText}>
+                                <Text style={{ fontWeight: '700' }}>Avalanche:</Text> Pay minimums on all, extra to highest rate ({highestRateLoan?.interestRate}%)
+                            </Text>
+                            <View style={styles.divider} />
+                            <Text style={styles.insightText}>
+                                <Text style={{ fontWeight: '700' }}>Snowball:</Text> Pay off smallest balance first for motivation
+                            </Text>
+                        </View>
+                    )}
+
+                    <View style={styles.insightCard}>
+                        <Text style={styles.insightLabel}>Avg Interest Rate</Text>
+                        <Text style={styles.insightValue}>
+                            {selectedLoanObjects.length > 0 
+                                ? (selectedLoanObjects.reduce((sum, l) => sum + l.interestRate, 0) / selectedLoanObjects.length).toFixed(2)
+                                : '0.00'}%
+                        </Text>
+                    </View>
+
+                    <View style={styles.insightCard}>
+                        <Text style={styles.insightLabel}>Interest Ratio</Text>
+                        <Text style={styles.insightValue}>
+                            {totalBorrowed > 0 ? ((totalInterest / totalBorrowed) * 100).toFixed(1) : '0'}%
+                        </Text>
+                        <Text style={styles.insightSubtext}>of principal</Text>
+                    </View>
+                </View>
+            )}
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    webContainer: {
+    container: {
         flex: 1,
-        backgroundColor: '#f5f5f7',
-    },
-    webHeader: {
-        backgroundColor: theme.colors.primary,
-        paddingVertical: 50,
-        paddingHorizontal: 20,
-        alignItems: 'center',
-        borderBottomWidth: 4,
-        borderBottomColor: 'rgba(255,255,255,0.2)',
-    },
-    headerContent: {
         flexDirection: 'row',
-        alignItems: 'center',
-        gap: 20,
-        maxWidth: 1200,
+        backgroundColor: '#f5f7fa',
     },
-    logo: {
-        width: 70,
-        height: 70,
-    } as any,
-    headerTextContainer: {
-        flex: 1,
+    // Left Sidebar
+    sidebar: {
+        width: 260,
+        backgroundColor: '#1e293b',
+        borderRightWidth: 1,
+        borderRightColor: '#0f172a',
+        flexDirection: 'column',
     },
-    webTitle: {
-        fontSize: 42,
+    sidebarHeader: {
+        padding: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255,255,255,0.1)',
+    },
+    appTitle: {
+        fontSize: 18,
         fontWeight: 'bold',
         color: 'white',
     },
-    webSubtitle: {
-        fontSize: 18,
-        color: 'rgba(255,255,255,0.95)',
-        marginTop: 8,
-        maxWidth: 600,
+    sidebarSection: {
+        padding: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255,255,255,0.1)',
     },
-    scrollView: {
-        flex: 1,
-    },
-    webContentContainer: {
-        maxWidth: 1200,
-        width: '100%',
-        alignSelf: 'center',
-        padding: 40,
-        paddingBottom: 80,
-    },
-    heroSection: {
-        backgroundColor: 'white',
-        padding: 60,
-        borderRadius: 16,
-        marginBottom: 40,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
-        elevation: 5,
-    },
-    heroTitle: {
-        fontSize: 36,
-        fontWeight: 'bold',
-        color: theme.colors.textPrimary,
-        marginBottom: 16,
-        textAlign: 'center',
-    },
-    heroDescription: {
-        fontSize: 18,
-        lineHeight: 28,
-        color: theme.colors.textSecondary,
-        marginBottom: 40,
-        textAlign: 'center',
-        maxWidth: 800,
-        alignSelf: 'center',
-    },
-    featureGrid: {
-        flexDirection: 'row',
-        gap: 24,
-        marginBottom: 40,
-        flexWrap: 'wrap',
-        justifyContent: 'center',
-    },
-    featureCard: {
-        flex: 1,
-        minWidth: 250,
-        maxWidth: 300,
-        backgroundColor: '#f8f9fa',
-        padding: 24,
-        borderRadius: 12,
-        alignItems: 'center',
-    },
-    featureIcon: {
-        fontSize: 48,
-        marginBottom: 16,
-    },
-    featureTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: theme.colors.textPrimary,
-        marginBottom: 8,
-        textAlign: 'center',
-    },
-    featureText: {
-        fontSize: 14,
-        lineHeight: 20,
-        color: theme.colors.textSecondary,
-        textAlign: 'center',
-    },
-    heroCTA: {
-        backgroundColor: theme.colors.primary,
-        paddingHorizontal: 40,
-        paddingVertical: 16,
-        borderRadius: 8,
-        alignSelf: 'center',
-    },
-    heroCTAText: {
-        color: 'white',
-        fontSize: 18,
-        fontWeight: '600',
-    },
-    dashboardIntro: {
-        marginBottom: 24,
-    },
-    dashboardTitle: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        color: theme.colors.textPrimary,
-        marginBottom: 8,
-    },
-    dashboardDescription: {
-        fontSize: 16,
-        lineHeight: 24,
-        color: theme.colors.textSecondary,
-    },
-    webSummaryRow: {
-        flexDirection: 'row',
-        gap: 20,
-        marginBottom: 50,
-        flexWrap: 'wrap',
-    },
-    webCard: {
-        flex: 1,
-        minWidth: 280,
-        backgroundColor: 'white',
-        padding: 28,
-        borderRadius: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 3,
-    },
-    cardIcon: {
-        fontSize: 32,
+    sidebarLabel: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: 'rgba(255,255,255,0.5)',
+        letterSpacing: 1,
         marginBottom: 12,
     },
-    cardLabel: {
+    sidebarButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 10,
+        borderRadius: 6,
+        marginBottom: 4,
+    },
+    sidebarButtonActive: {
+        backgroundColor: theme.colors.primary,
+    },
+    sidebarButtonIcon: {
+        fontSize: 16,
+        marginRight: 10,
+    },
+    sidebarButtonText: {
+        fontSize: 14,
+        color: 'rgba(255,255,255,0.7)',
+    },
+    sidebarButtonTextActive: {
+        color: 'white',
+        fontWeight: '600',
+    },
+    loansList: {
+        maxHeight: 300,
+    },
+    loanItem: {
+        padding: 10,
+        borderRadius: 6,
+        marginBottom: 4,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+    },
+    loanItemName: {
+        fontSize: 13,
+        color: 'white',
+        fontWeight: '500',
+        marginBottom: 2,
+    },
+    loanItemAmount: {
+        fontSize: 11,
+        color: 'rgba(255,255,255,0.6)',
+    },
+    sidebarFooter: {
+        marginTop: 'auto',
+        padding: 16,
+        gap: 8,
+    },
+    newLoanButton: {
+        backgroundColor: theme.colors.primary,
+        padding: 12,
+        borderRadius: 6,
+        alignItems: 'center',
+    },
+    newLoanButtonText: {
+        color: 'white',
         fontSize: 14,
         fontWeight: '600',
-        color: theme.colors.textSecondary,
-        marginBottom: 8,
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
     },
-    cardValue: {
-        fontSize: 32,
+    deleteAllButton: {
+        padding: 10,
+        borderRadius: 6,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(239, 68, 68, 0.5)',
+    },
+    deleteAllButtonText: {
+        color: '#ef4444',
+        fontSize: 12,
+        fontWeight: '500',
+    },
+    // Main Content
+    mainContent: {
+        flex: 1,
+        padding: 24,
+    },
+    emptyState: {
+        flex: 1,
+        backgroundColor: 'white',
+        padding: 60,
+        borderRadius: 12,
+        alignItems: 'center',
+        marginTop: 40,
+    },
+    emptyIcon: {
+        fontSize: 64,
+        marginBottom: 16,
+    },
+    emptyTitle: {
+        fontSize: 24,
         fontWeight: 'bold',
         color: theme.colors.textPrimary,
         marginBottom: 8,
     },
-    cardDescription: {
-        fontSize: 13,
-        color: theme.colors.textTertiary,
-        lineHeight: 18,
-    },
-    loansSection: {
-        marginBottom: 40,
-    },
-    loansSectionHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
+    emptyText: {
+        fontSize: 14,
+        color: theme.colors.textSecondary,
+        textAlign: 'center',
+        maxWidth: 400,
+        lineHeight: 22,
         marginBottom: 24,
-        gap: 20,
     },
-    sectionTitle: {
-        fontSize: 28,
+    emptyButton: {
+        backgroundColor: theme.colors.primary,
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        borderRadius: 6,
+    },
+    emptyButtonText: {
+        color: 'white',
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    statsBar: {
+        flexDirection: 'row',
+        backgroundColor: 'white',
+        padding: 20,
+        borderRadius: 12,
+        marginBottom: 24,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 1,
+    },
+    statItem: {
+        flex: 1,
+        alignItems: 'center',
+    },
+    statValue: {
+        fontSize: 20,
         fontWeight: 'bold',
         color: theme.colors.textPrimary,
         marginBottom: 4,
     },
-    sectionDescription: {
-        fontSize: 14,
+    statLabel: {
+        fontSize: 11,
         color: theme.colors.textSecondary,
-        lineHeight: 20,
-        maxWidth: 600,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
-    addButton: {
-        backgroundColor: theme.colors.primary,
-        paddingHorizontal: 24,
-        paddingVertical: 12,
-        borderRadius: 8,
-        flexShrink: 0,
+    statDivider: {
+        width: 1,
+        backgroundColor: '#e5e7eb',
+        marginHorizontal: 16,
     },
-    addButtonText: {
-        color: 'white',
-        fontSize: 16,
-        fontWeight: '600',
+    section: {
+        marginBottom: 24,
     },
-    webLoansGrid: {
+    sectionHeader: {
         flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 20,
-    },
-    webLoanCard: {
-        backgroundColor: 'white',
-        padding: 24,
-        borderRadius: 12,
-        width: '31%' as any,
-        minWidth: 280,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 3,
-        cursor: 'pointer' as any,
-        borderWidth: 2,
-        borderColor: 'transparent',
-        transition: 'all 0.3s ease',
-    },
-    loanName: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: theme.colors.textPrimary,
-        marginBottom: 12,
-    },
-    loanAmount: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        color: theme.colors.primary,
-        marginBottom: 12,
-    },
-    loanDetails: {
-        flexDirection: 'row',
-        gap: 8,
+        justifyContent: 'space-between',
+        alignItems: 'center',
         marginBottom: 16,
     },
-    loanDetail: {
-        fontSize: 14,
-        color: theme.colors.textSecondary,
+    sectionTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: theme.colors.textPrimary,
     },
-    loanMonthlyContainer: {
+    toggleInsightsButton: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 6,
+        backgroundColor: '#f3f4f6',
+    },
+    toggleInsightsText: {
+        fontSize: 12,
+        color: theme.colors.textSecondary,
+        fontWeight: '500',
+    },
+    comparisonTable: {
+        backgroundColor: 'white',
+        borderRadius: 12,
+        overflow: 'hidden',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 1,
+    },
+    tableHeader: {
         flexDirection: 'row',
-        alignItems: 'baseline',
+        backgroundColor: '#f9fafb',
+        borderBottomWidth: 2,
+        borderBottomColor: '#e5e7eb',
+    },
+    tableHeaderCell: {
+        paddingVertical: 12,
+        paddingHorizontal: 12,
+    },
+    tableHeaderText: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: theme.colors.textSecondary,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    tableRow: {
+        flexDirection: 'row',
+        borderBottomWidth: 1,
+        borderBottomColor: '#f3f4f6',
+    },
+    tableRowEven: {
+        backgroundColor: '#fafbfc',
+    },
+    tableRowSelected: {
+        backgroundColor: '#eff6ff',
+    },
+    tableCell: {
+        paddingVertical: 14,
+        paddingHorizontal: 12,
+        justifyContent: 'center',
+    },
+    loanNameCell: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: theme.colors.primary,
+    },
+    tableCellText: {
+        fontSize: 13,
+        color: theme.colors.textPrimary,
+    },
+    interestText: {
+        color: '#e67e22',
+        fontWeight: '500',
+    },
+    checkbox: {
+        width: 18,
+        height: 18,
+        borderWidth: 2,
+        borderColor: '#d1d5db',
+        borderRadius: 4,
+        justifyContent: 'center',
+        alignItems: 'center',
+        alignSelf: 'center',
+    },
+    checkboxSelected: {
+        backgroundColor: theme.colors.primary,
+        borderColor: theme.colors.primary,
+    },
+    checkmark: {
+        color: 'white',
+        fontSize: 11,
+        fontWeight: 'bold',
+    },
+    // Grid View
+    loansGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 16,
+        marginTop: 16,
+    },
+    gridCard: {
+        backgroundColor: 'white',
+        padding: 16,
+        borderRadius: 10,
+        width: '31%' as any,
+        minWidth: 220,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 1,
+        borderWidth: 2,
+        borderColor: 'transparent',
+    },
+    gridCardSelected: {
+        borderColor: theme.colors.primary,
+        backgroundColor: '#f0f9ff',
+    },
+    gridCardHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
         marginBottom: 12,
     },
-    loanMonthly: {
-        fontSize: 18,
+    gridCardName: {
+        fontSize: 15,
+        fontWeight: 'bold',
         color: theme.colors.textPrimary,
-        fontWeight: '600',
+        flex: 1,
     },
-    loanMonthlyLabel: {
-        fontSize: 14,
-        color: theme.colors.textSecondary,
-        marginLeft: 4,
+    gridCardCheckbox: {
+        marginLeft: 8,
     },
-    viewDetailsText: {
-        fontSize: 13,
+    gridCardAmount: {
+        fontSize: 22,
+        fontWeight: 'bold',
         color: theme.colors.primary,
-        fontWeight: '500',
-        marginTop: 8,
+        marginBottom: 12,
     },
-    actionsSection: {
-        alignItems: 'center',
-        marginTop: 40,
-        paddingTop: 40,
-        borderTopWidth: 1,
-        borderTopColor: '#e0e0e0',
+    gridCardRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 6,
     },
-    deleteButton: {
-        paddingHorizontal: 24,
-        paddingVertical: 12,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: theme.colors.error,
+    gridCardLabel: {
+        fontSize: 12,
+        color: theme.colors.textSecondary,
     },
-    deleteButtonText: {
-        color: theme.colors.error,
-        fontSize: 14,
+    gridCardValue: {
+        fontSize: 12,
         fontWeight: '600',
+        color: theme.colors.textPrimary,
     },
-    footer: {
-        marginTop: 60,
-        paddingTop: 30,
-        borderTopWidth: 1,
-        borderTopColor: '#e0e0e0',
-        alignItems: 'center',
+    // Right Insights Panel
+    insightsPanel: {
+        width: 280,
+        backgroundColor: 'white',
+        borderLeftWidth: 1,
+        borderLeftColor: '#e5e7eb',
+        padding: 20,
     },
-    footerText: {
-        fontSize: 13,
+    insightsPanelTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: theme.colors.textPrimary,
+        marginBottom: 16,
+    },
+    insightCard: {
+        backgroundColor: 'white',
+        padding: 14,
+        borderRadius: 8,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+    },
+    insightLabel: {
+        fontSize: 10,
+        fontWeight: '600',
+        color: theme.colors.textSecondary,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginBottom: 6,
+    },
+    insightValue: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: theme.colors.textPrimary,
+    },
+    insightSubtext: {
+        fontSize: 10,
         color: theme.colors.textTertiary,
-        textAlign: 'center',
-        lineHeight: 20,
+        marginTop: 2,
+    },
+    insightBadge: {
+        fontSize: 9,
+        fontWeight: '700',
+        color: '#e67e22',
+        textTransform: 'uppercase',
+        backgroundColor: '#fef5e7',
+        paddingHorizontal: 6,
+        paddingVertical: 3,
+        borderRadius: 3,
+        alignSelf: 'flex-start',
+        marginBottom: 8,
+    },
+    insightBadgeGreen: {
+        fontSize: 9,
+        fontWeight: '700',
+        color: '#27ae60',
+        textTransform: 'uppercase',
+        backgroundColor: '#e8f8f5',
+        paddingHorizontal: 6,
+        paddingVertical: 3,
+        borderRadius: 3,
+        alignSelf: 'flex-start',
+        marginBottom: 8,
+    },
+    insightLoanName: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: theme.colors.textPrimary,
+        marginBottom: 4,
+    },
+    insightRate: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: theme.colors.primary,
+        marginBottom: 6,
+    },
+    insightText: {
+        fontSize: 11,
+        lineHeight: 16,
+        color: theme.colors.textSecondary,
+    },
+    divider: {
+        height: 1,
+        backgroundColor: '#e5e7eb',
+        marginVertical: 10,
     },
 });
