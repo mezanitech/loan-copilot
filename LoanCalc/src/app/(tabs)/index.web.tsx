@@ -283,6 +283,24 @@ function ComparisonDashboardContent() {
                 </View>
 
                 <View style={styles.sidebarFooter}>
+                    <TouchableOpacity 
+                        style={styles.appStoreBanner}
+                        onPress={() => typeof window !== 'undefined' && window.open('https://apps.apple.com/co/app/loan-co-pilot/id6757390003', '_blank')}
+                    >
+                        <View style={styles.appStoreBannerContent}>
+                            <View style={styles.appStoreIconContainer}>
+                                <RNImage 
+                                    source={require('../../../assets/icon.png')} 
+                                    style={styles.appStoreIconImage}
+                                />
+                            </View>
+                            <View style={styles.appStoreBannerText}>
+                                <Text style={styles.appStoreBadgeSmall}>Download on the</Text>
+                                <Text style={styles.appStoreBadgeLarge}>App Store</Text>
+                                <Text style={styles.appStoreBannerSubtitle}>Get the full iOS experience with offline support, widgets, and more!</Text>
+                            </View>
+                        </View>
+                    </TouchableOpacity>
                     <TouchableOpacity style={styles.themeToggle} onPress={toggleTheme}>
                         <Text style={styles.themeToggleIcon}>{mode === 'light' ? '🌙' : '☀️'}</Text>
                         <Text style={styles.themeToggleText}>{mode === 'light' ? 'Dark Mode' : 'Light Mode'}</Text>
@@ -1051,6 +1069,53 @@ const createStyles = (colors: any, mode: string) => StyleSheet.create({
         height: 1,
         backgroundColor: colors.border,
         marginVertical: 10,
+    },
+    appStoreBanner: {
+        marginBottom: 12,
+        backgroundColor: mode === 'dark' ? '#000000' : '#000000',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: mode === 'dark' ? '#333333' : '#000000',
+        overflow: 'hidden',
+    },
+    appStoreBannerContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 14,
+        gap: 12,
+    },
+    appStoreIconContainer: {
+        width: 40,
+        height: 40,
+        borderRadius: 8,
+        overflow: 'hidden',
+        backgroundColor: '#FFFFFF',
+    },
+    appStoreIconImage: {
+        width: 40,
+        height: 40,
+    },
+    appStoreBannerText: {
+        flex: 1,
+    },
+    appStoreBadgeSmall: {
+        fontSize: 10,
+        color: '#FFFFFF',
+        fontWeight: '400',
+        letterSpacing: 0.5,
+        marginBottom: -2,
+    },
+    appStoreBadgeLarge: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#FFFFFF',
+        marginBottom: 4,
+        letterSpacing: -0.5,
+    },
+    appStoreBannerSubtitle: {
+        fontSize: 10,
+        color: '#A0A0A0',
+        lineHeight: 14,
     },
     themeToggle: {
         flexDirection: 'row',

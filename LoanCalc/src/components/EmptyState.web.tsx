@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image as RNImage } from 'react-native';
 import { theme } from '../constants/theme';
 import { Link } from 'expo-router';
 
@@ -13,7 +13,10 @@ type EmptyStateProps = {
 export default function EmptyState({ title, description, actionText, actionLink, icon = "📊" }: EmptyStateProps) {
     return (
         <View style={styles.container}>
-            <Text style={styles.icon}>{icon}</Text>
+            <RNImage 
+                source={require('../../assets/icon.png')} 
+                style={styles.iconImage}
+            />
             <Text style={styles.title}>{title}</Text>
             <Text style={styles.description}>{description}</Text>
             <Link href={actionLink as any} asChild>
@@ -37,6 +40,13 @@ const styles = StyleSheet.create({
         fontSize: 64,
         marginBottom: theme.spacing.xl,
         opacity: 0.8,
+    },
+    iconImage: {
+        width: 96,
+        height: 96,
+        marginBottom: theme.spacing.xl,
+        opacity: 0.9,
+        borderRadius: 20,
     },
     title: {
         fontSize: theme.fontSize.xl,
