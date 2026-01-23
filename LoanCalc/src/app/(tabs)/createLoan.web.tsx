@@ -33,8 +33,15 @@ function CreateLoanScreenWebContent() {
     const [activeStep, setActiveStep] = useState(1);
     const [showInsights, setShowInsights] = useState(true);
     const [windowWidth, setWindowWidth] = useState(Dimensions.get('window').width);
+    const [insightsPanelWidth, setInsightsPanelWidth] = useState(320);
+    const [isResizing, setIsResizing] = useState(false);
+    const [sidebarWidth, setSidebarWidth] = useState(260);
+    const [isResizingSidebar, setIsResizingSidebar] = useState(false);
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const { mode, toggleTheme, colors } = useTheme();
+    
+    // Create styles based on current theme
+    const styles = createStyles(colors, mode);
     
     // Enable keyboard shortcuts
     useKeyboardShortcuts();
@@ -47,6 +54,56 @@ function CreateLoanScreenWebContent() {
             useNativeDriver: true,
         }).start();
     }, []);
+
+    // Handle insights panel resize
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!isResizing) return;
+            const newWidth = window.innerWidth - e.clientX;
+            setInsightsPanelWidth(Math.max(250, Math.min(500, newWidth)));
+        };
+
+        const handleMouseUp = () => {
+            setIsResizing(false);
+        };
+
+        if (isResizing) {
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+        }
+
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isResizing]);
+
+    // Handle sidebar resize
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!isResizingSidebar) return;
+            const newWidth = e.clientX;
+            setSidebarWidth(Math.max(200, Math.min(400, newWidth)));
+        };
+
+        const handleMouseUp = () => {
+            setIsResizingSidebar(false);
+        };
+
+        if (isResizingSidebar) {
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+        }
+
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isResizingSidebar]);
 
     // Handle window resize for responsive behavior
     useEffect(() => {
@@ -293,13 +350,11 @@ function CreateLoanScreenWebContent() {
         <Animated.View style={[styles.container, { backgroundColor: colors.background, opacity: fadeAnim }]}>
             {/* Left Sidebar - Hide on mobile */}
             {windowWidth >= 768 && (
-                <View style={[styles.sidebar, { backgroundColor: colors.sidebar }]}>
-                    <View style={styles.sidebarHeader}>
-                        <Text style={[styles.appTitle, { color: colors.sidebarTextActive }]}>💰 Loan Co-Pilot</Text>
-                        <TouchableOpacity onPress={toggleTheme} style={styles.themeToggle}>
-                            <Text style={styles.themeToggleIcon}>{mode === 'light' ? '🌙' : '☀️'}</Text>
-                        </TouchableOpacity>
-                    </View>
+                <View style={{ width: sidebarWidth, position: 'relative' }}>
+                    <ScrollView style={[styles.sidebar, { backgroundColor: colors.sidebar, width: '100%' }]}>
+                        <View style={styles.sidebarHeader}>
+                            <Text style={[styles.appTitle, { color: colors.sidebarTextActive }]}>💰 Loan Co-Pilot</Text>
+                        </View>
 
                     <View style={styles.sidebarSection}>
                         <Text style={styles.sidebarLabel}>NAVIGATION</Text>
@@ -358,6 +413,33 @@ function CreateLoanScreenWebContent() {
                             </View>
                         </View>
                     )}
+
+                    <View style={styles.sidebarFooter}>
+                        <TouchableOpacity style={styles.themeToggle} onPress={toggleTheme}>
+                            <Text style={styles.themeToggleIcon}>{mode === 'light' ? '🌙' : '☀️'}</Text>
+                            <Text style={styles.themeToggleText}>{mode === 'light' ? 'Dark Mode' : 'Light Mode'}</Text>
+                        </TouchableOpacity>
+                        <Link href="/createLoan" asChild>
+                            <TouchableOpacity style={styles.newLoanButton}>
+                                <Text style={styles.newLoanButtonText}>+ New Loan</Text>
+                            </TouchableOpacity>
+                        </Link>
+                    </View>
+                    </ScrollView>
+                    {/* Resize Handle */}
+                    <div
+                        style={{
+                            position: 'absolute',
+                            right: 0,
+                            top: 0,
+                            bottom: 0,
+                            width: 4,
+                            cursor: 'ew-resize',
+                            backgroundColor: isResizingSidebar ? colors.primary : 'transparent',
+                            zIndex: 10,
+                        }}
+                        onMouseDown={() => setIsResizingSidebar(true)}
+                    />
                 </View>
             )}
 
@@ -470,7 +552,7 @@ function CreateLoanScreenWebContent() {
                             <LineChart
                                 title="Principal Balance Over Time"
                                 data={paymentSchedule.map(p => ({ value: p.balance }))}
-                                color={theme.colors.primary}
+                                color={colors.primary}
                                 yAxisFormatter={(v) => formatCurrency(v, { code: 'USD', symbol: '$', name: 'US Dollar', position: 'before' }, 0)}
                             />
                         </View>
@@ -520,13 +602,28 @@ function CreateLoanScreenWebContent() {
 
             {/* Right Insights Panel - Conditionally shown */}
             {windowWidth >= 1200 && showInsights && isValidLoanData() && (
-                <View style={styles.insightsPanel}>
-                    <View style={styles.insightsPanelHeader}>
-                        <Text style={styles.insightsPanelTitle}>💡 Insights</Text>
-                        <TouchableOpacity onPress={() => setShowInsights(false)}>
-                            <Text style={styles.closeInsightsButton}>✕</Text>
-                        </TouchableOpacity>
-                    </View>
+                <View style={{ width: insightsPanelWidth, position: 'relative' }}>
+                    {/* Resize Handle */}
+                    <div
+                        style={{
+                            position: 'absolute',
+                            left: 0,
+                            top: 0,
+                            bottom: 0,
+                            width: 4,
+                            cursor: 'ew-resize',
+                            backgroundColor: isResizing ? colors.primary : 'transparent',
+                            zIndex: 10,
+                        }}
+                        onMouseDown={() => setIsResizing(true)}
+                    />
+                    <ScrollView style={[styles.insightsPanel, { width: '100%' }]}>
+                        <View style={styles.insightsPanelHeader}>
+                            <Text style={styles.insightsPanelTitle}>💡 Insights</Text>
+                            <TouchableOpacity onPress={() => setShowInsights(false)}>
+                                <Text style={styles.closeInsightsButton}>✕</Text>
+                            </TouchableOpacity>
+                        </View>
                     
                     <View style={styles.insightCard}>
                         <Text style={styles.insightLabel}>Monthly Payment</Text>
@@ -564,30 +661,31 @@ function CreateLoanScreenWebContent() {
                             Making extra payments can significantly reduce your total interest. Try adding extra payments in the loan details view!
                         </Text>
                     </View>
+                    </ScrollView>
                 </View>
             )}
         </Animated.View>
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any, mode: string) => StyleSheet.create({
     container: {
         flex: 1,
         flexDirection: 'row',
-        backgroundColor: '#f5f7fa',
+        backgroundColor: colors.background,
     },
     // Sidebar
     sidebar: {
-        width: 260,
-        backgroundColor: '#1e293b',
+        flex: 1,
+        backgroundColor: colors.sidebar,
         borderRightWidth: 1,
-        borderRightColor: '#0f172a',
+        borderRightColor: colors.border,
         flexDirection: 'column',
     },
     sidebarHeader: {
         padding: 20,
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255,255,255,0.1)',
+        borderBottomColor: colors.border,
     },
     appTitle: {
         fontSize: 18,
@@ -597,12 +695,12 @@ const styles = StyleSheet.create({
     sidebarSection: {
         padding: 16,
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255,255,255,0.1)',
+        borderBottomColor: colors.border,
     },
     sidebarLabel: {
         fontSize: 10,
         fontWeight: '700',
-        color: 'rgba(255,255,255,0.5)',
+        color: colors.sidebarText,
         letterSpacing: 1,
         marginBottom: 12,
     },
@@ -614,7 +712,7 @@ const styles = StyleSheet.create({
         marginBottom: 4,
     },
     sidebarButtonActive: {
-        backgroundColor: theme.colors.primary,
+        backgroundColor: colors.primary,
     },
     sidebarButtonIcon: {
         fontSize: 16,
@@ -622,11 +720,47 @@ const styles = StyleSheet.create({
     },
     sidebarButtonText: {
         fontSize: 14,
-        color: 'rgba(255,255,255,0.7)',
+        color: colors.sidebarText,
     },
     sidebarButtonTextActive: {
-        color: 'white',
+        color: colors.sidebarTextActive,
         fontWeight: '600',
+    },
+    sidebarFooter: {
+        marginTop: 'auto',
+        padding: 16,
+        gap: 8,
+    },
+    newLoanButton: {
+        backgroundColor: colors.primary,
+        padding: 12,
+        borderRadius: 6,
+        alignItems: 'center',
+    },
+    newLoanButtonText: {
+        color: colors.textInverse,
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    themeToggle: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 12,
+        borderRadius: 8,
+        backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
+        borderWidth: 1,
+        borderColor: colors.border,
+        marginBottom: 8,
+        gap: 10,
+    },
+    themeToggleIcon: {
+        fontSize: 18,
+    },
+    themeToggleText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: colors.sidebarTextActive,
     },
     progressSteps: {
         gap: 16,
@@ -650,8 +784,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     stepNumberActive: {
-        backgroundColor: theme.colors.primary,
-        borderColor: theme.colors.primary,
+        backgroundColor: colors.primary,
+        borderColor: colors.primary,
     },
     stepNumberText: {
         fontSize: 12,
@@ -712,24 +846,24 @@ const styles = StyleSheet.create({
     pageTitle: {
         fontSize: 32,
         fontWeight: 'bold',
-        color: theme.colors.textPrimary,
+        color: colors.textPrimary,
         marginBottom: 4,
     },
     pageSubtitle: {
         fontSize: 14,
-        color: theme.colors.textSecondary,
+        color: colors.textSecondary,
     },
     toggleInsightsButton: {
         paddingHorizontal: 12,
         paddingVertical: 8,
         borderRadius: 6,
-        backgroundColor: '#f3f4f6',
+        backgroundColor: colors.backgroundSecondary,
         borderWidth: 1,
-        borderColor: '#e5e7eb',
+        borderColor: colors.border,
     },
     toggleInsightsText: {
         fontSize: 12,
-        color: theme.colors.textSecondary,
+        color: colors.textSecondary,
         fontWeight: '500',
     },
     validationBadge: {
@@ -746,7 +880,7 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     formSection: {
-        backgroundColor: 'white',
+        backgroundColor: colors.card,
         borderRadius: 12,
         padding: 24,
         marginBottom: 24,
@@ -755,6 +889,8 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.05,
         shadowRadius: 4,
         elevation: 1,
+        borderWidth: 1,
+        borderColor: colors.border,
     },
     formGrid: {
         flexDirection: 'row',
@@ -772,16 +908,16 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         marginBottom: 8,
-        color: theme.colors.textPrimary,
+        color: colors.textPrimary,
     },
     dateInput: {
-        backgroundColor: theme.colors.background,
+        backgroundColor: colors.background,
         borderWidth: 1.5,
-        borderColor: theme.colors.gray200,
+        borderColor: colors.gray200,
         borderRadius: 8,
         padding: 14,
         fontSize: 14,
-        color: theme.colors.textPrimary,
+        color: colors.textPrimary,
         outlineStyle: 'none',
     } as any,
     summarySection: {
@@ -796,7 +932,7 @@ const styles = StyleSheet.create({
     chartCard: {
         flex: 1,
         minWidth: 350,
-        backgroundColor: 'white',
+        backgroundColor: colors.card,
         borderRadius: 12,
         padding: 20,
         shadowColor: '#000',
@@ -804,6 +940,8 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.05,
         shadowRadius: 4,
         elevation: 1,
+        borderWidth: 1,
+        borderColor: colors.border,
     },
     actionSection: {
         flexDirection: 'row',
@@ -812,7 +950,7 @@ const styles = StyleSheet.create({
     },
     viewDetailsButton: {
         flex: 1,
-        backgroundColor: theme.colors.primary,
+        backgroundColor: colors.primary,
         padding: 16,
         borderRadius: 8,
         alignItems: 'center',
@@ -824,24 +962,24 @@ const styles = StyleSheet.create({
     },
     createAnotherButton: {
         flex: 1,
-        backgroundColor: 'white',
+        backgroundColor: colors.card,
         padding: 16,
         borderRadius: 8,
         alignItems: 'center',
         borderWidth: 2,
-        borderColor: theme.colors.primary,
+        borderColor: colors.primary,
     },
     createAnotherButtonText: {
-        color: theme.colors.primary,
+        color: colors.primary,
         fontSize: 15,
         fontWeight: '600',
     },
     // Insights Panel
     insightsPanel: {
-        width: 280,
-        backgroundColor: 'white',
+        flex: 1,
+        backgroundColor: colors.background,
         borderLeftWidth: 1,
-        borderLeftColor: '#e5e7eb',
+        borderLeftColor: colors.border,
         padding: 20,
     },
     insightsPanelHeader: {
@@ -853,25 +991,25 @@ const styles = StyleSheet.create({
     insightsPanelTitle: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: theme.colors.textPrimary,
+        color: colors.textPrimary,
     },
     closeInsightsButton: {
         fontSize: 18,
-        color: theme.colors.textSecondary,
+        color: colors.textSecondary,
         padding: 4,
     },
     insightCard: {
-        backgroundColor: 'white',
+        backgroundColor: colors.card,
         padding: 14,
         borderRadius: 8,
         marginBottom: 12,
         borderWidth: 1,
-        borderColor: '#e5e7eb',
+        borderColor: colors.border,
     },
     insightLabel: {
         fontSize: 10,
         fontWeight: '600',
-        color: theme.colors.textSecondary,
+        color: colors.textSecondary,
         textTransform: 'uppercase',
         letterSpacing: 0.5,
         marginBottom: 6,
@@ -879,11 +1017,11 @@ const styles = StyleSheet.create({
     insightValue: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: theme.colors.textPrimary,
+        color: colors.textPrimary,
     },
     insightSubtext: {
         fontSize: 10,
-        color: theme.colors.textTertiary,
+        color: colors.textTertiary,
         marginTop: 2,
     },
     insightBadge: {
@@ -901,15 +1039,7 @@ const styles = StyleSheet.create({
     insightText: {
         fontSize: 11,
         lineHeight: 16,
-        color: theme.colors.textSecondary,
-    },
-    themeToggle: {
-        padding: 8,
-        borderRadius: 8,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    },
-    themeToggleIcon: {
-        fontSize: 20,
+        color: colors.textSecondary,
     },
 });
 

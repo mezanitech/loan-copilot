@@ -1,6 +1,6 @@
 // WEB-SPECIFIC VERSION - Loan Comparison Dashboard
 import { Link, useFocusEffect, useRouter } from "expo-router";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Text, View, StyleSheet, ScrollView, TouchableOpacity, Alert, Animated } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { theme } from '../../constants/theme';
@@ -35,11 +35,90 @@ function ComparisonDashboardContent() {
     const [viewMode, setViewMode] = useState<ViewMode>('comparison');
     const [showInsights, setShowInsights] = useState(true);
     const [isLoading, setIsLoading] = useState(true);
+    const [insightsPanelWidth, setInsightsPanelWidth] = useState(320);
+    const [isResizing, setIsResizing] = useState(false);
+    const [sidebarWidth, setSidebarWidth] = useState(260);
+    const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+    const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200);
     const router = useRouter();
     const { mode, toggleTheme, colors } = useTheme();
     
+    // Create styles based on current theme
+    const styles = createStyles(colors, mode);
+    
     // Enable keyboard shortcuts
     useKeyboardShortcuts();
+
+    // Handle insights panel resize
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!isResizing) return;
+            const newWidth = window.innerWidth - e.clientX;
+            setInsightsPanelWidth(Math.max(250, Math.min(500, newWidth)));
+        };
+
+        const handleMouseUp = () => {
+            setIsResizing(false);
+        };
+
+        if (isResizing) {
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+        }
+
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isResizing]);
+
+    // Handle sidebar resize
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!isResizingSidebar) return;
+            const newWidth = e.clientX;
+            setSidebarWidth(Math.max(200, Math.min(400, newWidth)));
+        };
+
+        const handleMouseUp = () => {
+            setIsResizingSidebar(false);
+        };
+
+        if (isResizingSidebar) {
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+        }
+
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isResizingSidebar]);
+
+    // Handle window resize for responsive behavior
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        const handleResize = () => {
+            const width = window.innerWidth;
+            setWindowWidth(width);
+            // Auto-hide insights on smaller screens
+            if (width < 1200) {
+                setShowInsights(false);
+            } else {
+                setShowInsights(true);
+            }
+        };
+
+        window.addEventListener('resize', handleResize);
+        handleResize(); // Initial check
+
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     const loadLoans = async () => {
         try {
@@ -94,45 +173,32 @@ function ComparisonDashboardContent() {
         : null;
 
     const deleteAllLoans = async () => {
-        Alert.alert(
-            "Delete All Loans",
-            "Are you sure you want to delete all loans? This cannot be undone.",
-            [
-                { text: "Cancel", style: "cancel" },
-                {
-                    text: "Delete All",
-                    style: "destructive",
-                    onPress: async () => {
-                        try {
-                            for (const loan of loans) {
-                                if (loan.scheduledNotificationIds && loan.scheduledNotificationIds.length > 0) {
-                                    await cancelLoanNotifications(loan.scheduledNotificationIds);
-                                }
-                            }
-                            await AsyncStorage.setItem('loans', JSON.stringify([]));
-                            setLoans([]);
-                            setSelectedLoans(new Set());
-                            Alert.alert("Success", "All loans have been deleted.");
-                        } catch (error) {
-                            console.error('Failed to delete loans:', error);
-                            Alert.alert("Error", "Failed to delete loans");
-                        }
+        if (window.confirm("Are you sure you want to delete all loans? This cannot be undone.")) {
+            try {
+                for (const loan of loans) {
+                    if (loan.scheduledNotificationIds && loan.scheduledNotificationIds.length > 0) {
+                        await cancelLoanNotifications(loan.scheduledNotificationIds);
                     }
                 }
-            ]
-        );
+                await AsyncStorage.setItem('loans', JSON.stringify([]));
+                setLoans([]);
+                setSelectedLoans(new Set());
+                alert("All loans have been deleted.");
+            } catch (error) {
+                console.error('Failed to delete loans:', error);
+                alert("Failed to delete loans");
+            }
+        }
     };
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
             {/* Left Sidebar */}
-            <View style={[styles.sidebar, { backgroundColor: colors.sidebar }]}>
-                <View style={styles.sidebarHeader}>
-                    <Text style={[styles.appTitle, { color: colors.sidebarTextActive }]}>💰 Loan Co-Pilot</Text>
-                    <TouchableOpacity onPress={toggleTheme} style={styles.themeToggle}>
-                        <Text style={styles.themeToggleIcon}>{mode === 'light' ? '🌙' : '☀️'}</Text>
-                    </TouchableOpacity>
-                </View>
+            <View style={{ width: sidebarWidth, position: 'relative' }}>
+                <ScrollView style={[styles.sidebar, { backgroundColor: colors.sidebar, width: '100%' }]}>
+                    <View style={styles.sidebarHeader}>
+                        <Text style={[styles.appTitle, { color: colors.sidebarTextActive }]}>💰 Loan Co-Pilot</Text>
+                    </View>
 
                 <View style={styles.sidebarSection}>
                     <Text style={styles.sidebarLabel}>NAVIGATION</Text>
@@ -173,6 +239,10 @@ function ComparisonDashboardContent() {
                 </View>
 
                 <View style={styles.sidebarFooter}>
+                    <TouchableOpacity style={styles.themeToggle} onPress={toggleTheme}>
+                        <Text style={styles.themeToggleIcon}>{mode === 'light' ? '🌙' : '☀️'}</Text>
+                        <Text style={styles.themeToggleText}>{mode === 'light' ? 'Dark Mode' : 'Light Mode'}</Text>
+                    </TouchableOpacity>
                     <Link href="/createLoan" asChild>
                         <TouchableOpacity style={styles.newLoanButton}>
                             <Text style={styles.newLoanButtonText}>+ New Loan</Text>
@@ -184,6 +254,21 @@ function ComparisonDashboardContent() {
                         </TouchableOpacity>
                     )}
                 </View>
+                </ScrollView>
+                {/* Resize Handle */}
+                <div
+                    style={{
+                        position: 'absolute',
+                        right: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: 4,
+                        cursor: 'ew-resize',
+                        backgroundColor: isResizingSidebar ? colors.primary : 'transparent',
+                        zIndex: 10,
+                    }}
+                    onMouseDown={() => setIsResizingSidebar(true)}
+                />
             </View>
 
             {/* Main Content */}
@@ -228,14 +313,7 @@ function ComparisonDashboardContent() {
                             <View style={styles.section}>
                                 <View style={styles.sectionHeader}>
                                     <Text style={styles.sectionTitle}>Loan Comparison Table</Text>
-                                    <TouchableOpacity 
-                                        style={styles.toggleInsightsButton}
-                                        onPress={() => setShowInsights(!showInsights)}
-                                    >
-                                        <Text style={styles.toggleInsightsText}>
-                                            {showInsights ? '👁️ Hide' : '👁️ Show'} Insights
-                                        </Text>
-                                    </TouchableOpacity>
+
                                 </View>
 
                                 <View style={styles.comparisonTable}>
@@ -374,10 +452,25 @@ function ComparisonDashboardContent() {
                 )}
             </ScrollView>
 
-            {/* Right Insights Panel */}
-            {loans.length > 0 && showInsights && (
-                <View style={[styles.insightsPanel, { backgroundColor: colors.card, borderLeftColor: colors.border }]}>
-                    <Text style={[styles.insightsPanelTitle, { color: colors.textPrimary }]}>💡 Insights</Text>
+            {/* Right Insights Panel - Conditionally shown */}
+            {windowWidth >= 1200 && showInsights && loans.length > 0 && (
+                <View style={{ width: insightsPanelWidth, position: 'relative' }}>
+                    {/* Resize Handle */}
+                    <div
+                        style={{
+                            position: 'absolute',
+                            left: 0,
+                            top: 0,
+                            bottom: 0,
+                            width: 4,
+                            cursor: 'ew-resize',
+                            backgroundColor: isResizing ? colors.primary : 'transparent',
+                            zIndex: 10,
+                        }}
+                        onMouseDown={() => setIsResizing(true)}
+                    />
+                    <ScrollView style={[styles.insightsPanel, { backgroundColor: colors.card, borderLeftColor: colors.border, width: '100%' }]}>
+                        <Text style={[styles.insightsPanelTitle, { color: colors.textPrimary }]}>💡 Insights</Text>
                     
                     <View style={[styles.insightCard, { backgroundColor: mode === 'dark' ? colors.backgroundSecondary : 'white', borderColor: colors.border }]}>
                         <Text style={[styles.insightLabel, { color: colors.textSecondary }]}>Selected Loans</Text>
@@ -435,30 +528,31 @@ function ComparisonDashboardContent() {
                         </Text>
                         <Text style={[styles.insightSubtext, { color: colors.textTertiary }]}>of principal</Text>
                     </View>
+                    </ScrollView>
                 </View>
             )}
         </View>
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any, mode: string) => StyleSheet.create({
     container: {
         flex: 1,
         flexDirection: 'row',
-        backgroundColor: '#f5f7fa',
+        backgroundColor: colors.background,
     },
     // Left Sidebar
     sidebar: {
-        width: 260,
-        backgroundColor: '#1e293b',
+        flex: 1,
+        backgroundColor: colors.sidebar,
         borderRightWidth: 1,
-        borderRightColor: '#0f172a',
+        borderRightColor: colors.border,
         flexDirection: 'column',
     },
     sidebarHeader: {
         padding: 20,
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255,255,255,0.1)',
+        borderBottomColor: colors.border,
     },
     appTitle: {
         fontSize: 18,
@@ -468,12 +562,12 @@ const styles = StyleSheet.create({
     sidebarSection: {
         padding: 16,
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255,255,255,0.1)',
+        borderBottomColor: colors.border,
     },
     sidebarLabel: {
         fontSize: 10,
         fontWeight: '700',
-        color: 'rgba(255,255,255,0.5)',
+        color: colors.sidebarText,
         letterSpacing: 1,
         marginBottom: 12,
     },
@@ -485,7 +579,7 @@ const styles = StyleSheet.create({
         marginBottom: 4,
     },
     sidebarButtonActive: {
-        backgroundColor: theme.colors.primary,
+        backgroundColor: colors.primary,
     },
     sidebarButtonIcon: {
         fontSize: 16,
@@ -493,10 +587,10 @@ const styles = StyleSheet.create({
     },
     sidebarButtonText: {
         fontSize: 14,
-        color: 'rgba(255,255,255,0.7)',
+        color: colors.sidebarText,
     },
     sidebarButtonTextActive: {
-        color: 'white',
+        color: colors.sidebarTextActive,
         fontWeight: '600',
     },
     loansList: {
@@ -506,17 +600,17 @@ const styles = StyleSheet.create({
         padding: 10,
         borderRadius: 6,
         marginBottom: 4,
-        backgroundColor: 'rgba(255,255,255,0.05)',
+        backgroundColor: mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
     },
     loanItemName: {
         fontSize: 13,
-        color: 'white',
+        color: colors.sidebarTextActive,
         fontWeight: '500',
         marginBottom: 2,
     },
     loanItemAmount: {
         fontSize: 11,
-        color: 'rgba(255,255,255,0.6)',
+        color: colors.sidebarText,
     },
     sidebarFooter: {
         marginTop: 'auto',
@@ -524,13 +618,13 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     newLoanButton: {
-        backgroundColor: theme.colors.primary,
+        backgroundColor: colors.primary,
         padding: 12,
         borderRadius: 6,
         alignItems: 'center',
     },
     newLoanButtonText: {
-        color: 'white',
+        color: colors.textInverse,
         fontSize: 14,
         fontWeight: '600',
     },
@@ -550,10 +644,11 @@ const styles = StyleSheet.create({
     mainContent: {
         flex: 1,
         padding: 24,
+        backgroundColor: colors.background,
     },
     emptyState: {
         flex: 1,
-        backgroundColor: 'white',
+        backgroundColor: colors.card,
         padding: 60,
         borderRadius: 12,
         alignItems: 'center',
@@ -566,19 +661,19 @@ const styles = StyleSheet.create({
     emptyTitle: {
         fontSize: 24,
         fontWeight: 'bold',
-        color: theme.colors.textPrimary,
+        color: colors.textPrimary,
         marginBottom: 8,
     },
     emptyText: {
         fontSize: 14,
-        color: theme.colors.textSecondary,
+        color: colors.textSecondary,
         textAlign: 'center',
         maxWidth: 400,
         lineHeight: 22,
         marginBottom: 24,
     },
     emptyButton: {
-        backgroundColor: theme.colors.primary,
+        backgroundColor: colors.primary,
         paddingHorizontal: 24,
         paddingVertical: 12,
         borderRadius: 6,
@@ -590,7 +685,7 @@ const styles = StyleSheet.create({
     },
     statsBar: {
         flexDirection: 'row',
-        backgroundColor: 'white',
+        backgroundColor: colors.card,
         padding: 20,
         borderRadius: 12,
         marginBottom: 24,
@@ -599,6 +694,8 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.05,
         shadowRadius: 4,
         elevation: 1,
+        borderWidth: 1,
+        borderColor: colors.border,
     },
     statItem: {
         flex: 1,
@@ -607,18 +704,18 @@ const styles = StyleSheet.create({
     statValue: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: theme.colors.textPrimary,
+        color: colors.textPrimary,
         marginBottom: 4,
     },
     statLabel: {
         fontSize: 11,
-        color: theme.colors.textSecondary,
+        color: colors.textSecondary,
         textTransform: 'uppercase',
         letterSpacing: 0.5,
     },
     statDivider: {
         width: 1,
-        backgroundColor: '#e5e7eb',
+        backgroundColor: colors.border,
         marginHorizontal: 16,
     },
     section: {
@@ -633,21 +730,21 @@ const styles = StyleSheet.create({
     sectionTitle: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: theme.colors.textPrimary,
+        color: colors.textPrimary,
     },
     toggleInsightsButton: {
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 6,
-        backgroundColor: '#f3f4f6',
+        backgroundColor: colors.backgroundSecondary,
     },
     toggleInsightsText: {
         fontSize: 12,
-        color: theme.colors.textSecondary,
+        color: colors.textSecondary,
         fontWeight: '500',
     },
     comparisonTable: {
-        backgroundColor: 'white',
+        backgroundColor: colors.card,
         borderRadius: 12,
         overflow: 'hidden',
         shadowColor: '#000',
@@ -655,12 +752,14 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.05,
         shadowRadius: 4,
         elevation: 1,
+        borderWidth: 1,
+        borderColor: colors.border,
     },
     tableHeader: {
         flexDirection: 'row',
-        backgroundColor: '#f9fafb',
+        backgroundColor: colors.backgroundSecondary,
         borderBottomWidth: 2,
-        borderBottomColor: '#e5e7eb',
+        borderBottomColor: colors.border,
     },
     tableHeaderCell: {
         paddingVertical: 12,
@@ -669,20 +768,20 @@ const styles = StyleSheet.create({
     tableHeaderText: {
         fontSize: 11,
         fontWeight: '700',
-        color: theme.colors.textSecondary,
+        color: colors.textSecondary,
         textTransform: 'uppercase',
         letterSpacing: 0.5,
     },
     tableRow: {
         flexDirection: 'row',
         borderBottomWidth: 1,
-        borderBottomColor: '#f3f4f6',
+        borderBottomColor: colors.border,
     },
     tableRowEven: {
-        backgroundColor: '#fafbfc',
+        backgroundColor: colors.backgroundSecondary,
     },
     tableRowSelected: {
-        backgroundColor: '#eff6ff',
+        backgroundColor: mode === 'dark' ? 'rgba(167, 139, 250, 0.1)' : '#eff6ff',
     },
     tableCell: {
         paddingVertical: 14,
@@ -692,11 +791,11 @@ const styles = StyleSheet.create({
     loanNameCell: {
         fontSize: 13,
         fontWeight: '600',
-        color: theme.colors.primary,
+        color: colors.primary,
     },
     tableCellText: {
         fontSize: 13,
-        color: theme.colors.textPrimary,
+        color: colors.textPrimary,
     },
     interestText: {
         color: '#e67e22',
@@ -706,15 +805,15 @@ const styles = StyleSheet.create({
         width: 18,
         height: 18,
         borderWidth: 2,
-        borderColor: '#d1d5db',
+        borderColor: colors.border,
         borderRadius: 4,
         justifyContent: 'center',
         alignItems: 'center',
         alignSelf: 'center',
     },
     checkboxSelected: {
-        backgroundColor: theme.colors.primary,
-        borderColor: theme.colors.primary,
+        backgroundColor: colors.primary,
+        borderColor: colors.primary,
     },
     checkmark: {
         color: 'white',
@@ -729,7 +828,7 @@ const styles = StyleSheet.create({
         marginTop: 16,
     },
     gridCard: {
-        backgroundColor: 'white',
+        backgroundColor: colors.card,
         padding: 16,
         borderRadius: 10,
         width: '31%' as any,
@@ -740,11 +839,11 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
         elevation: 1,
         borderWidth: 2,
-        borderColor: 'transparent',
+        borderColor: colors.border,
     },
     gridCardSelected: {
-        borderColor: theme.colors.primary,
-        backgroundColor: '#f0f9ff',
+        borderColor: colors.primary,
+        backgroundColor: mode === 'dark' ? 'rgba(167, 139, 250, 0.1)' : '#f0f9ff',
     },
     gridCardHeader: {
         flexDirection: 'row',
@@ -755,7 +854,7 @@ const styles = StyleSheet.create({
     gridCardName: {
         fontSize: 15,
         fontWeight: 'bold',
-        color: theme.colors.textPrimary,
+        color: colors.textPrimary,
         flex: 1,
     },
     gridCardCheckbox: {
@@ -764,7 +863,7 @@ const styles = StyleSheet.create({
     gridCardAmount: {
         fontSize: 22,
         fontWeight: 'bold',
-        color: theme.colors.primary,
+        color: colors.primary,
         marginBottom: 12,
     },
     gridCardRow: {
@@ -774,39 +873,39 @@ const styles = StyleSheet.create({
     },
     gridCardLabel: {
         fontSize: 12,
-        color: theme.colors.textSecondary,
+        color: colors.textSecondary,
     },
     gridCardValue: {
         fontSize: 12,
         fontWeight: '600',
-        color: theme.colors.textPrimary,
+        color: colors.textPrimary,
     },
     // Right Insights Panel
     insightsPanel: {
-        width: 280,
-        backgroundColor: 'white',
+        flex: 1,
+        backgroundColor: colors.background,
         borderLeftWidth: 1,
-        borderLeftColor: '#e5e7eb',
+        borderLeftColor: colors.border,
         padding: 20,
     },
     insightsPanelTitle: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: theme.colors.textPrimary,
+        color: colors.textPrimary,
         marginBottom: 16,
     },
     insightCard: {
-        backgroundColor: 'white',
+        backgroundColor: colors.card,
         padding: 14,
         borderRadius: 8,
         marginBottom: 12,
         borderWidth: 1,
-        borderColor: '#e5e7eb',
+        borderColor: colors.border,
     },
     insightLabel: {
         fontSize: 10,
         fontWeight: '600',
-        color: theme.colors.textSecondary,
+        color: colors.textSecondary,
         textTransform: 'uppercase',
         letterSpacing: 0.5,
         marginBottom: 6,
@@ -814,11 +913,11 @@ const styles = StyleSheet.create({
     insightValue: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: theme.colors.textPrimary,
+        color: colors.textPrimary,
     },
     insightSubtext: {
         fontSize: 10,
-        color: theme.colors.textTertiary,
+        color: colors.textTertiary,
         marginTop: 2,
     },
     insightBadge: {
@@ -848,32 +947,44 @@ const styles = StyleSheet.create({
     insightLoanName: {
         fontSize: 13,
         fontWeight: '600',
-        color: theme.colors.textPrimary,
+        color: colors.textPrimary,
         marginBottom: 4,
     },
     insightRate: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: theme.colors.primary,
+        color: colors.primary,
         marginBottom: 6,
     },
     insightText: {
         fontSize: 11,
         lineHeight: 16,
-        color: theme.colors.textSecondary,
+        color: colors.textSecondary,
     },
     divider: {
         height: 1,
-        backgroundColor: '#e5e7eb',
+        backgroundColor: colors.border,
         marginVertical: 10,
     },
     themeToggle: {
-        padding: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 12,
         borderRadius: 8,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
+        borderWidth: 1,
+        borderColor: colors.border,
+        marginBottom: 8,
+        gap: 10,
     },
     themeToggleIcon: {
-        fontSize: 20,
+        fontSize: 18,
+    },
+    themeToggleText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: colors.sidebarTextActive,
     },
     fadeIn: {
         opacity: 1,
